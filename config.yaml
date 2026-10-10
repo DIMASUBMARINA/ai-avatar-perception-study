@@ -1,0 +1,17 @@
+# Experimental Setup Configuration
+experiment:
+  name: "ai_avatar_perception_study"
+  version: "1.0.0"
+  viewing_time_limit_ms: 3000
+  random_seed: 42
+
+dataset:
+  raw_logs_path: "data/sample/sample_logs.csv"
+  processed_output_path: "data/processed/metrics_summary.json"
+  sample_size_target: 30
+  real_ratio: 0.5
+
+guardrails:
+  max_allowed_tir_percent: 15.0
+  min_valid_rt_ms: 200
+  max_valid_rt_ms: 15000
