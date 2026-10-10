@@ -1,0 +1,36 @@
+```gitignore
+# Byte-compiled / optimized / DLL files (Python)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches and Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Data & Temporary Log Files
+*.log
+*.tmp
+data/raw/*.tmp
+
+# Node / JS / Web Caches (если используются)
+node_modules/
+npm-debug.log*
+
+# Operating System / IDE Specific Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.vscode/
+.idea/
