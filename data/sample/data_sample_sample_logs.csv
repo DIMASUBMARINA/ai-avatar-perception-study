@@ -1,0 +1,11 @@
+participant_id,condition,stimulus_id,is_ai,user_choice,response_time_ms
+P01,3s_limit,img_01.jpg,1,1,1250
+P01,3s_limit,img_02.jpg,0,0,890
+P01,3s_limit,img_03.jpg,1,0,1400
+P01,3s_limit,img_04.jpg,0,1,1100
+P01,unrestricted,img_05.jpg,1,1,4200
+P01,unrestricted,img_06.jpg,0,0,3100
+P02,3s_limit,img_01.jpg,1,1,1350
+P02,3s_limit,img_02.jpg,0,0,950
+P02,3s_limit,img_03.jpg,1,1,1120
+P02,3s_limit,img_04.jpg,0,0,1050
