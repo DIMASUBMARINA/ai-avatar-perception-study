@@ -44,8 +44,7 @@ def run_benchmark():
             "mean_latency_ms": round(mean_rt, 2)
         }
         
-    print("
---- Benchmark Execution Results ---")
+    print("--- Benchmark Execution Results ---")
     print(json.dumps(results, indent=2))
     
     os.makedirs("data/processed", exist_ok=True)
@@ -53,8 +52,7 @@ def run_benchmark():
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
         
-    print(f"
-[SUCCESS] Benchmark pipeline completed successfully. Output written to {out_path}")
+    print(f"[SUCCESS] Benchmark pipeline completed successfully. Output written to {out_path}")
 
 if __name__ == "__main__":
     run_benchmark()
