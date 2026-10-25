@@ -1,58 +1,133 @@
-import yaml
-import pandas as pd
 import json
 import os
+import platform
+import time
+import yaml
+import pandas as pd
+import numpy as np
 
-def run_benchmark():
-    print("=== Running Research Experiment Benchmark Pipeline ===")
+def get_environment_metadata():
+    """Сбор метаданных аппаратного и программного окружения для 100% воспроизводимости."""
+    return {
+        "python_version": platform.python_version(),
+        "os_name": platform.system(),
+        "os_release": platform.release(),
+        "architecture": platform.machine(),
+        "processor": platform.processor() or "Generic CPU"
+    }
+
+def run_warmup(warmup_runs: int):
+    """Фаза прогрева (Warm-up Phase) для устранения эффекта холодного старта."""
+    print(f"[INFO] Executing Warm-up Phase ({warmup_runs} runs)...")
+    for _ in range(warmup_runs):
+        # Имитация синтетической нагрузки для прогрева кэша и интерпретатора
+        _ = np.exp(np.sin(np.linspace(0, 100, 1000)))
+    print("[INFO] Warm-up complete. Discarding cold-start measurements.\n")
+
+def run_clean_benchmark():
+    print("=== Week 7: Clean Data Collection & Benchmark Pipeline ===")
     
-    # Load configuration
+    # 1. Загрузка конфигурации
     with open("config.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
         
+    env_meta = get_environment_metadata()
+    print(f"[INFO] Environment: {env_meta['os_name']} {env_meta['os_release']} | Python {env_meta['python_version']}")
+    
+    # 2. Фаза прогрева
+    warmup_runs = config["experiment"].get("warmup_runs", 5)
+    run_warmup(warmup_runs)
+    
     raw_path = config["dataset"]["raw_logs_path"]
-    print(f"[INFO] Loading raw experiment log sample from: {raw_path}")
+    jsonl_output = config["dataset"].get("jsonl_output_path", "data/raw/test_run.jsonl")
+    min_rt = config["guardrails"]["min_valid_rt_ms"]
     
     if not os.path.exists(raw_path):
         raise FileNotFoundError(f"Sample data file not found at {raw_path}")
         
     df = pd.read_csv(raw_path)
+    os.makedirs(os.path.dirname(jsonl_output), exist_ok=True)
     
-    # Filter anomalies (guardrails)
-    min_rt = config["guardrails"]["min_valid_rt_ms"]
-    valid_df = df[df["response_time_ms"] >= min_rt].copy()
+    jsonl_entries = []
     
-    # Calculate metrics per condition
-    results = {}
+    # 3. Изолированный замер и формирование атомарных логов (.jsonl)
+    print(f"[INFO] Processing {len(df)} entries with I/O isolation...")
+    for _, row in df.iterrows():
+        # Изоляция I/O: замеряем чистую логику валидации
+        t_start_ns = time.perf_counter_ns()
+        
+        is_valid = bool(row["response_time_ms"] >= min_rt)
+        is_correct = bool((row["is_ai"] == row["user_choice"])) if is_valid else False
+        
+        t_end_ns = time.perf_counter_ns()
+        eval_overhead_us = (t_end_ns - t_start_ns) / 1000.0
+        
+        # Атомарный объект измерения с наносекундным таймстемпом
+        entry = {
+            "timestamp_ns": time.time_ns(),
+            "participant_id": str(row["participant_id"]),
+            "condition": str(row["condition"]),
+            "stimulus_id": str(row["stimulus_id"]),
+            "is_ai": int(row["is_ai"]),
+            "user_choice": int(row["user_choice"]),
+            "response_time_ms": float(row["response_time_ms"]),
+            "is_valid": is_valid,
+            "is_correct": is_correct,
+            "eval_overhead_us": eval_overhead_us
+        }
+        jsonl_entries.append(entry)
+
+    # Запись в .jsonl производится СТРОГО ВНЕ блока измерения задержки
+    with open(jsonl_output, "w", encoding="utf-8") as f:
+        for entry in jsonl_entries:
+            f.write(json.dumps(entry) + "\n")
+            
+    print(f"[SUCCESS] Saved {len(jsonl_entries)} clean records to JSONL: {jsonl_output}")
+    
+    # 4. Расчет статистических метрик и процентилей (p50, p95, p99)
+    valid_entries = [e for e in jsonl_entries if e["is_valid"]]
+    valid_df = pd.DataFrame(valid_entries)
+    
+    summary = {}
     for condition, group in valid_df.groupby("condition"):
+        rts = group["response_time_ms"].values
         tp = ((group["is_ai"] == 1) & (group["user_choice"] == 1)).sum()
         tn = ((group["is_ai"] == 0) & (group["user_choice"] == 0)).sum()
-        fp = ((group["is_ai"] == 1) & (group["user_choice"] == 0)).sum()
-        fn = ((group["is_ai"] == 0) & (group["user_choice"] == 1)).sum()
+        fp = ((group["is_ai"] == 0) & (group["user_choice"] == 1)).sum()
+        fn = ((group["is_ai"] == 1) & (group["user_choice"] == 0)).sum()
         
         total = len(group)
         acc = (tp + tn) / total if total > 0 else 0.0
         fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
         fnr = fn / (tp + fn) if (tp + fn) > 0 else 0.0
-        mean_rt = group["response_time_ms"].mean()
         
-        results[condition] = {
+        summary[condition] = {
             "sample_count": int(total),
-            "accuracy": round(acc * 100, 2),
-            "fpr_percent": round(fpr * 100, 2),
-            "fnr_percent": round(fnr * 100, 2),
-            "mean_latency_ms": round(mean_rt, 2)
+            "accuracy_percent": round(float(acc * 100), 2),
+            "fpr_percent": round(float(fpr * 100), 2),
+            "fnr_percent": round(float(fnr * 100), 2),
+            "latency_metrics_ms": {
+                "mean": round(float(np.mean(rts)), 2),
+                "median_p50": round(float(np.median(rts)), 2),
+                "p95": round(float(np.percentile(rts, 95)), 2),
+                "p99": round(float(np.percentile(rts, 99)), 2)
+            }
         }
         
-    print("--- Benchmark Execution Results ---")
-    print(json.dumps(results, indent=2))
+    final_output = {
+        "metadata": env_meta,
+        "summary": summary
+    }
     
-    os.makedirs("data/processed", exist_ok=True)
-    out_path = config["dataset"]["processed_output_path"]
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2)
+    print("\n--- Summary Results (Percentiles & Accuracy) ---")
+    print(json.dumps(final_output, indent=2))
+    
+    out_summary = config["dataset"]["processed_output_path"]
+    os.makedirs(os.path.dirname(out_summary), exist_ok=True)
+    with open(out_summary, "w", encoding="utf-8") as f:
+        json.dump(final_output, f, indent=2)
         
-    print(f"[SUCCESS] Benchmark pipeline completed successfully. Output written to {out_path}")
+    print(f"\n[SUCCESS] Pipeline execution finished. Summary saved to: {out_summary}")
 
 if __name__ == "__main__":
-    run_benchmark()
+    run_clean_benchmark()

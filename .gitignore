@@ -1,4 +1,3 @@
-```gitignore
 # Byte-compiled / optimized / DLL files (Python)
 __pycache__/
 *.py[cod]
@@ -15,10 +14,12 @@ env/
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 
-# Data & Temporary Log Files
+# Data & Temporary Log Files (Исправление замечания препода)
 *.log
 *.tmp
-data/raw/*.tmp
+data/raw/*.tmpz
+data/processed/
+reports/figures/
 
 # Node / JS / Web Caches (если используются)
 node_modules/
