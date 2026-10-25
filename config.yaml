@@ -1,14 +1,12 @@
-# Experimental Setup Configuration (Week 7 Clean Benchmark)
+# Experimental Setup Configuration
 experiment:
   name: "ai_avatar_perception_study"
-  version: "2.0.0"
+  version: "1.0.0"
   viewing_time_limit_ms: 3000
   random_seed: 42
-  warmup_runs: 5             # Количество отбрасываемых прогонов для прогрева
 
 dataset:
   raw_logs_path: "data/sample/sample_logs.csv"
-  jsonl_output_path: "data/raw/test_run.jsonl"
   processed_output_path: "data/processed/metrics_summary.json"
   sample_size_target: 30
   real_ratio: 0.5
