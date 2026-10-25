@@ -4,7 +4,7 @@ experiment:
   version: "2.0.0"
   viewing_time_limit_ms: 3000
   random_seed: 42
-  warmup_runs: 5            
+  warmup_runs: 5             # Количество отбрасываемых прогонов для прогрева
 
 dataset:
   raw_logs_path: "data/sample/sample_logs.csv"

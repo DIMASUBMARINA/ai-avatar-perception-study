@@ -1,16 +1,14 @@
 name: avatar-perception
 channels:
-  - defaults
   - conda-forge
 dependencies:
   - python=3.11
-  - pandas=2.2.1
-  - numpy=1.26.4
-  - scipy=1.12.0
-  - pyyaml=6.0.1
-  - matplotlib=3.8.3
-  - seaborn=0.13.2
-  - jupyterlab=4.1.2
-  - pip
-  - pip:
-    - openpyxl==3.1.2
+  - pandas>=2.2
+  - numpy>=1.26
+  - scipy>=1.12
+  - pyyaml>=6.0
+  - matplotlib>=3.8
+  - seaborn>=0.13
+  - jupyterlab>=4.1
+  - openpyxl>=3.1
+  - pytest>=8.0

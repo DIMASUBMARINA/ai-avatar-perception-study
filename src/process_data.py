@@ -1,15 +1,30 @@
 import os
 import json
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
+import yaml
 from scipy.stats import norm
 
-def bootstrap_ci(series: np.ndarray, n_bootstraps: int = 1000, ci: float = 95.0) -> tuple:
+ROOT = Path(__file__).resolve().parents[1]  # корень репозитория: скрипт работает из любой папки
+
+
+def _load_seed(default: int = 42) -> int:
+    """Seed из config.yaml (experiment.random_seed)."""
+    try:
+        with open(ROOT / "config.yaml", "r", encoding="utf-8") as f:
+            return int(yaml.safe_load(f)["experiment"]["random_seed"])
+    except (OSError, KeyError, TypeError):
+        return default
+
+def bootstrap_ci(series: np.ndarray, n_bootstraps: int = 1000, ci: float = 95.0, seed: int = 42) -> tuple:
     """Calculates 95% Bootstrapped Confidence Interval for mean latency."""
     if len(series) == 0:
         return 0.0, 0.0
+    rng = np.random.default_rng(seed)  # фиксированный seed -> воспроизводимые CI
     bootstrapped_means = [
-        np.mean(np.random.choice(series, size=len(series), replace=True))
+        np.mean(rng.choice(series, size=len(series), replace=True))
         for _ in range(n_bootstraps)
     ]
     lower_bound = np.percentile(bootstrapped_means, (100.0 - ci) / 2.0)
@@ -17,15 +32,21 @@ def bootstrap_ci(series: np.ndarray, n_bootstraps: int = 1000, ci: float = 95.0)
     return lower_bound, upper_bound
 
 def calculate_d_prime(hit_rate: float, fa_rate: float, n_signal: int, n_noise: int) -> float:
-    """Calculates Signal Detection Theory Sensitivity Index (d') with Hautus loglinear correction."""
-    adjusted_hr = np.clip(hit_rate, 0.5 / max(1, n_signal), 1.0 - 0.5 / max(1, n_signal))
-    adjusted_far = np.clip(fa_rate, 0.5 / max(1, n_noise), 1.0 - 0.5 / max(1, n_noise))
+    """Signal Detection Theory sensitivity index d' with Hautus loglinear correction.
+
+    hit = (TP + 0.5) / (n_signal + 1),  FA = (FP + 0.5) / (n_noise + 1)
+    """
+    adjusted_hr = (hit_rate * n_signal + 0.5) / (n_signal + 1.0)
+    adjusted_far = (fa_rate * n_noise + 0.5) / (n_noise + 1.0)
     return float(norm.ppf(adjusted_hr) - norm.ppf(adjusted_far))
 
 def process_and_aggregate(
-    input_path: str = "data/raw/test_run.jsonl", 
-    output_dir: str = "data/processed"
+    input_path: str = None,
+    output_dir: str = None
 ) -> pd.DataFrame:
+    input_path = str(input_path or ROOT / "data/raw/test_run.jsonl")
+    output_dir = str(output_dir or ROOT / "data/processed")
+    seed = _load_seed()
     print(f"[STEP 1] Loading raw JSONL logs from: {input_path}")
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"File not found: {input_path}")
@@ -59,6 +80,7 @@ def process_and_aggregate(
         valid_group = group[group["is_valid"] == True]
         rts = valid_group["response_time_ms"].values
         
+        # Расчет ошибок по исправленной логике SDT (Positive = AI, Negative = Real)
         tp = ((valid_group["is_ai"] == 1) & (valid_group["user_choice"] == 1)).sum()
         tn = ((valid_group["is_ai"] == 0) & (valid_group["user_choice"] == 0)).sum()
         fp = ((valid_group["is_ai"] == 0) & (valid_group["user_choice"] == 1)).sum()
@@ -73,7 +95,7 @@ def process_and_aggregate(
         fa_rate = fp / (fp + tn) if (fp + tn) > 0 else 0.0
         d_prime = calculate_d_prime(hit_rate, fa_rate, n_signal=tp+fn, n_noise=fp+tn)
         
-        ci_low, ci_high = bootstrap_ci(rts, n_bootstraps=1000, ci=95.0)
+        ci_low, ci_high = bootstrap_ci(rts, n_bootstraps=1000, ci=95.0, seed=seed)
         
         metrics_list.append({
             "condition": condition,

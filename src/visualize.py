@@ -1,24 +1,31 @@
 import os
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+ROOT = Path(__file__).resolve().parents[1]  # корень репозитория: скрипт работает из любой папки
+
 def generate_scientific_plots(
-    raw_path: str = "data/raw/test_run.jsonl",
-    summary_path: str = "data/processed/metrics_summary.csv",
-    output_dir: str = "reports/figures"
+    raw_path: str = None,
+    summary_path: str = None,
+    output_dir: str = None
 ):
+    raw_path = str(raw_path or ROOT / "data/raw/test_run.jsonl")
+    summary_path = str(summary_path or ROOT / "data/processed/metrics_summary.csv")
+    output_dir = str(output_dir or ROOT / "reports/figures")
     print("[STEP 3 & 4] Generating publication-ready scientific plots...")
     os.makedirs(output_dir, exist_ok=True)
     
     # Set Scientific Publication Theme
     sns.set_theme(style="whitegrid", font_scale=1.2)
-    palette = sns.color_palette("colorblind")
-    
     # Load raw data
     df_raw = pd.read_json(raw_path, lines=True)
     valid_df = df_raw[df_raw["is_valid"] == True].copy()
+    # Палитра ровно под число условий (иначе seaborn выдаёт UserWarning)
+    palette = sns.color_palette("colorblind", n_colors=valid_df["condition"].nunique())
     
     # -------------------------------------------------------------------------
     # PLOT 1: Response Latency Across Conditions (Bar Chart with 95% CI)

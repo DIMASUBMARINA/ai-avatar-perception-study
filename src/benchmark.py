@@ -2,12 +2,16 @@ import json
 import os
 import platform
 import time
+from pathlib import Path
+
 import yaml
 import pandas as pd
 import numpy as np
 
+ROOT = Path(__file__).resolve().parents[1]  # корень репозитория: скрипт работает из любой папки
+
 def get_environment_metadata():
-    """Collection of hardware and software environment metadata for 100% reproducibility."""
+    """Сбор метаданных аппаратного и программного окружения для 100% воспроизводимости."""
     return {
         "python_version": platform.python_version(),
         "os_name": platform.system(),
@@ -17,26 +21,29 @@ def get_environment_metadata():
     }
 
 def run_warmup(warmup_runs: int):
-    """Warm-up phase to eliminate the cold-start effect."""
+    """Фаза прогрева (Warm-up Phase) для устранения эффекта холодного старта."""
     print(f"[INFO] Executing Warm-up Phase ({warmup_runs} runs)...")
     for _ in range(warmup_runs):
+        # Имитация синтетической нагрузки для прогрева кэша и интерпретатора
         _ = np.exp(np.sin(np.linspace(0, 100, 1000)))
     print("[INFO] Warm-up complete. Discarding cold-start measurements.\n")
 
 def run_clean_benchmark():
     print("=== Week 7: Clean Data Collection & Benchmark Pipeline ===")
     
-    with open("config.yaml", "r", encoding="utf-8") as f:
+    # 1. Загрузка конфигурации
+    with open(ROOT / "config.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
         
     env_meta = get_environment_metadata()
     print(f"[INFO] Environment: {env_meta['os_name']} {env_meta['os_release']} | Python {env_meta['python_version']}")
     
+    # 2. Фаза прогрева
     warmup_runs = config["experiment"].get("warmup_runs", 5)
     run_warmup(warmup_runs)
     
-    raw_path = config["dataset"]["raw_logs_path"]
-    jsonl_output = config["dataset"].get("jsonl_output_path", "data/raw/test_run.jsonl")
+    raw_path = ROOT / config["dataset"]["raw_logs_path"]
+    jsonl_output = ROOT / config["dataset"].get("jsonl_output_path", "data/raw/test_run.jsonl")
     min_rt = config["guardrails"]["min_valid_rt_ms"]
     
     if not os.path.exists(raw_path):
@@ -47,8 +54,10 @@ def run_clean_benchmark():
     
     jsonl_entries = []
     
+    # 3. Изолированный замер и формирование атомарных логов (.jsonl)
     print(f"[INFO] Processing {len(df)} entries with I/O isolation...")
     for _, row in df.iterrows():
+        # Изоляция I/O: замеряем чистую логику валидации
         t_start_ns = time.perf_counter_ns()
         
         is_valid = bool(row["response_time_ms"] >= min_rt)
@@ -57,6 +66,7 @@ def run_clean_benchmark():
         t_end_ns = time.perf_counter_ns()
         eval_overhead_us = (t_end_ns - t_start_ns) / 1000.0
         
+        # Атомарный объект измерения с наносекундным таймстемпом
         entry = {
             "timestamp_ns": time.time_ns(),
             "participant_id": str(row["participant_id"]),
@@ -71,12 +81,14 @@ def run_clean_benchmark():
         }
         jsonl_entries.append(entry)
 
+    # Запись в .jsonl производится СТРОГО ВНЕ блока измерения задержки
     with open(jsonl_output, "w", encoding="utf-8") as f:
         for entry in jsonl_entries:
             f.write(json.dumps(entry) + "\n")
             
     print(f"[SUCCESS] Saved {len(jsonl_entries)} clean records to JSONL: {jsonl_output}")
     
+    # 4. Расчет статистических метрик и процентилей (p50, p95, p99)
     valid_entries = [e for e in jsonl_entries if e["is_valid"]]
     valid_df = pd.DataFrame(valid_entries)
     
@@ -114,7 +126,7 @@ def run_clean_benchmark():
     print("\n--- Summary Results (Percentiles & Accuracy) ---")
     print(json.dumps(final_output, indent=2))
     
-    out_summary = config["dataset"]["processed_output_path"]
+    out_summary = ROOT / config["dataset"]["processed_output_path"]
     os.makedirs(os.path.dirname(out_summary), exist_ok=True)
     with open(out_summary, "w", encoding="utf-8") as f:
         json.dump(final_output, f, indent=2)
