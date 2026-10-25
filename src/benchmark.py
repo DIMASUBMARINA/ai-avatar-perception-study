@@ -1,137 +1,112 @@
+"""Collect raw latency measurements (warm-up + benchmark) into data/raw/test_run.jsonl.
+
+The timed function is evaluate_batch, run on batches of sample trials at several load levels.
+Only the call itself is timed; batch preparation and file I/O stay outside the timer.
+"""
 import json
-import os
-import platform
 import time
-from pathlib import Path
 
-import yaml
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]  # корень репозитория: скрипт работает из любой папки
+from common import environment_metadata, is_valid_trial, load_config, resolve
 
-def get_environment_metadata():
-    """Сбор метаданных аппаратного и программного окружения для 100% воспроизводимости."""
-    return {
-        "python_version": platform.python_version(),
-        "os_name": platform.system(),
-        "os_release": platform.release(),
-        "architecture": platform.machine(),
-        "processor": platform.processor() or "Generic CPU"
-    }
 
-def run_warmup(warmup_runs: int):
-    """Фаза прогрева (Warm-up Phase) для устранения эффекта холодного старта."""
-    print(f"[INFO] Executing Warm-up Phase ({warmup_runs} runs)...")
-    for _ in range(warmup_runs):
-        # Имитация синтетической нагрузки для прогрева кэша и интерпретатора
-        _ = np.exp(np.sin(np.linspace(0, 100, 1000)))
-    print("[INFO] Warm-up complete. Discarding cold-start measurements.\n")
+def evaluate_batch(batch: list, min_rt: float, max_rt: float) -> tuple:
+    """Return (n_invalid, n_correct) for a batch of (is_ai, user_choice, rt) trials."""
+    n_invalid = 0
+    n_correct = 0
+    for is_ai, user_choice, rt in batch:
+        if is_valid_trial(rt, min_rt, max_rt):
+            if is_ai == user_choice:
+                n_correct += 1
+        else:
+            n_invalid += 1
+    return n_invalid, n_correct
 
-def run_clean_benchmark():
-    print("=== Week 7: Clean Data Collection & Benchmark Pipeline ===")
-    
-    # 1. Загрузка конфигурации
-    with open(ROOT / "config.yaml", "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-        
-    env_meta = get_environment_metadata()
-    print(f"[INFO] Environment: {env_meta['os_name']} {env_meta['os_release']} | Python {env_meta['python_version']}")
-    
-    # 2. Фаза прогрева
-    warmup_runs = config["experiment"].get("warmup_runs", 5)
-    run_warmup(warmup_runs)
-    
-    raw_path = ROOT / config["dataset"]["raw_logs_path"]
-    jsonl_output = ROOT / config["dataset"].get("jsonl_output_path", "data/raw/test_run.jsonl")
+
+def build_pool(config: dict) -> list:
+    """Sample CSV trials plus synthetic edge cases from the config."""
+    sample = pd.read_csv(resolve(config["dataset"]["sample_logs_path"]))
+    pool = [
+        (int(r.is_ai), int(r.user_choice), float(r.response_time_ms))
+        for r in sample.itertuples(index=False)
+    ]
+    for case in config["benchmark"].get("edge_cases", []):
+        pool.append((int(case["is_ai"]), int(case["user_choice"]), float(case["response_time_ms"])))
+    return pool
+
+
+def run_benchmark() -> list:
+    config = load_config()
+    seed = config["experiment"]["random_seed"]
+    rng = np.random.default_rng(seed)
+    bcfg = config["benchmark"]
     min_rt = config["guardrails"]["min_valid_rt_ms"]
-    
-    if not os.path.exists(raw_path):
-        raise FileNotFoundError(f"Sample data file not found at {raw_path}")
-        
-    df = pd.read_csv(raw_path)
-    os.makedirs(os.path.dirname(jsonl_output), exist_ok=True)
-    
-    jsonl_entries = []
-    
-    # 3. Изолированный замер и формирование атомарных логов (.jsonl)
-    print(f"[INFO] Processing {len(df)} entries with I/O isolation...")
-    for _, row in df.iterrows():
-        # Изоляция I/O: замеряем чистую логику валидации
-        t_start_ns = time.perf_counter_ns()
-        
-        is_valid = bool(row["response_time_ms"] >= min_rt)
-        is_correct = bool((row["is_ai"] == row["user_choice"])) if is_valid else False
-        
-        t_end_ns = time.perf_counter_ns()
-        eval_overhead_us = (t_end_ns - t_start_ns) / 1000.0
-        
-        # Атомарный объект измерения с наносекундным таймстемпом
-        entry = {
-            "timestamp_ns": time.time_ns(),
-            "participant_id": str(row["participant_id"]),
-            "condition": str(row["condition"]),
-            "stimulus_id": str(row["stimulus_id"]),
-            "is_ai": int(row["is_ai"]),
-            "user_choice": int(row["user_choice"]),
-            "response_time_ms": float(row["response_time_ms"]),
-            "is_valid": is_valid,
-            "is_correct": is_correct,
-            "eval_overhead_us": eval_overhead_us
-        }
-        jsonl_entries.append(entry)
+    max_rt = config["guardrails"]["max_valid_rt_ms"]
 
-    # Запись в .jsonl производится СТРОГО ВНЕ блока измерения задержки
-    with open(jsonl_output, "w", encoding="utf-8") as f:
-        for entry in jsonl_entries:
-            f.write(json.dumps(entry) + "\n")
-            
-    print(f"[SUCCESS] Saved {len(jsonl_entries)} clean records to JSONL: {jsonl_output}")
-    
-    # 4. Расчет статистических метрик и процентилей (p50, p95, p99)
-    valid_entries = [e for e in jsonl_entries if e["is_valid"]]
-    valid_df = pd.DataFrame(valid_entries)
-    
-    summary = {}
-    for condition, group in valid_df.groupby("condition"):
-        rts = group["response_time_ms"].values
-        tp = ((group["is_ai"] == 1) & (group["user_choice"] == 1)).sum()
-        tn = ((group["is_ai"] == 0) & (group["user_choice"] == 0)).sum()
-        fp = ((group["is_ai"] == 0) & (group["user_choice"] == 1)).sum()
-        fn = ((group["is_ai"] == 1) & (group["user_choice"] == 0)).sum()
-        
-        total = len(group)
-        acc = (tp + tn) / total if total > 0 else 0.0
-        fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
-        fnr = fn / (tp + fn) if (tp + fn) > 0 else 0.0
-        
-        summary[condition] = {
-            "sample_count": int(total),
-            "accuracy_percent": round(float(acc * 100), 2),
-            "fpr_percent": round(float(fpr * 100), 2),
-            "fnr_percent": round(float(fnr * 100), 2),
-            "latency_metrics_ms": {
-                "mean": round(float(np.mean(rts)), 2),
-                "median_p50": round(float(np.median(rts)), 2),
-                "p95": round(float(np.percentile(rts, 95)), 2),
-                "p99": round(float(np.percentile(rts, 99)), 2)
-            }
-        }
-        
-    final_output = {
-        "metadata": env_meta,
-        "summary": summary
+    env = environment_metadata()
+    print(f"[INFO] Environment: {env['os_name']} {env['os_release']} | Python {env['python_version']} | CPUs: {env['cpu_count']}")
+    pool = build_pool(config)
+    print(f"[INFO] Pool size: {len(pool)} trials | seed={seed}")
+
+    records = []  # written to disk after all timing is done
+    for load in bcfg["load_levels"]:
+        for phase, n_runs in (("warmup", bcfg["warmup_runs"]), ("benchmark", bcfg["benchmark_runs"])):
+            for run_id in range(n_runs):
+                idx = rng.integers(0, len(pool), size=load)
+                batch = [pool[i] for i in idx]  # prepared outside the timer
+
+                runtime_error = False
+                t0 = time.perf_counter_ns()
+                try:
+                    n_invalid, n_correct = evaluate_batch(batch, min_rt, max_rt)
+                except Exception:  # record the failure instead of hiding it
+                    n_invalid, n_correct, runtime_error = load, 0, True
+                t1 = time.perf_counter_ns()
+
+                latency_us = (t1 - t0) / 1000.0
+                records.append({
+                    "timestamp_ns": time.time_ns(),
+                    "phase": phase,
+                    "run_id": run_id,
+                    "load_level": load,
+                    "batch_latency_us": latency_us,
+                    "latency_per_trial_us": latency_us / load,
+                    "n_invalid": n_invalid,
+                    "error_rate_pct": 100.0 * n_invalid / load,
+                    "n_correct": n_correct,
+                    "runtime_error": runtime_error,
+                })
+
+    out_jsonl = resolve(config["dataset"]["jsonl_output_path"])
+    out_jsonl.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_jsonl, "w", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec) + "\n")
+
+    meta = {
+        "environment": env,
+        "random_seed": seed,
+        "warmup_runs_per_level": bcfg["warmup_runs"],
+        "benchmark_runs_per_level": bcfg["benchmark_runs"],
+        "load_levels": bcfg["load_levels"],
+        "pool_size": len(pool),
+        "synthetic_edge_cases": bcfg.get("edge_cases", []),
     }
-    
-    print("\n--- Summary Results (Percentiles & Accuracy) ---")
-    print(json.dumps(final_output, indent=2))
-    
-    out_summary = ROOT / config["dataset"]["processed_output_path"]
-    os.makedirs(os.path.dirname(out_summary), exist_ok=True)
-    with open(out_summary, "w", encoding="utf-8") as f:
-        json.dump(final_output, f, indent=2)
-        
-    print(f"\n[SUCCESS] Pipeline execution finished. Summary saved to: {out_summary}")
+    with open(resolve(config["dataset"]["metadata_path"]), "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
+
+    n_warm = sum(r["phase"] == "warmup" for r in records)
+    print(f"[SUCCESS] {len(records)} records ({n_warm} warmup + {len(records) - n_warm} benchmark) -> {out_jsonl}")
+
+    print("\n--- Inline summary (benchmark phase, batch latency, us) ---")
+    print(f"{'load':>6} {'p50':>9} {'p95':>9} {'p99':>9}")
+    for load in bcfg["load_levels"]:
+        y = [r["batch_latency_us"] for r in records if r["phase"] == "benchmark" and r["load_level"] == load]
+        print(f"{load:>6} {np.percentile(y, 50):>9.3f} {np.percentile(y, 95):>9.3f} {np.percentile(y, 99):>9.3f}")
+    return records
+
 
 if __name__ == "__main__":
-    run_clean_benchmark()
+    run_benchmark()

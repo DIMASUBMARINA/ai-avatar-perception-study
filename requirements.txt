@@ -1,20 +1,15 @@
-# Core Data Science & Statistics
 pandas>=2.2
 numpy>=1.26
 scipy>=1.12
 pyyaml>=6.0
 
-# Data Visualization
 matplotlib>=3.8
 seaborn>=0.13
 
-# Reproducible Interactive Notebook Environment
 jupyterlab>=4.1
 notebook>=7.1
 
-# Auxiliary Utilities
 openpyxl>=3.1
 jinja2>=3.1
 
-# Tests
 pytest>=8.0

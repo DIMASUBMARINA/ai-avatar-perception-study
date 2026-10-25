@@ -1,0 +1,32 @@
+{
+  "environment": {
+    "python_version": "3.12.3",
+    "os_name": "Linux",
+    "os_release": "6.18.44-fc-v153",
+    "architecture": "x86_64",
+    "processor": "x86_64",
+    "cpu_count": 1,
+    "ram_gb": 3.9
+  },
+  "random_seed": 42,
+  "warmup_runs_per_level": 20,
+  "benchmark_runs_per_level": 30,
+  "load_levels": [
+    1,
+    2,
+    5,
+    10,
+    20,
+    50,
+    100
+  ],
+  "pool_size": 11,
+  "synthetic_edge_cases": [
+    {
+      "stimulus_id": "synthetic_anticipatory",
+      "is_ai": 1,
+      "user_choice": 1,
+      "response_time_ms": 120
+    }
+  ]
+}

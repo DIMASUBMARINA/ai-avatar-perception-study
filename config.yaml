@@ -1,19 +1,29 @@
-# Experimental Setup Configuration (Week 7 Clean Benchmark)
 experiment:
   name: "ai_avatar_perception_study"
-  version: "2.0.0"
+  version: "3.0.0"
   viewing_time_limit_ms: 3000
   random_seed: 42
-  warmup_runs: 5             # Количество отбрасываемых прогонов для прогрева
+
+benchmark:
+  warmup_runs: 20            # per load level, discarded
+  benchmark_runs: 30         # per load level
+  load_levels: [1, 2, 5, 10, 20, 50, 100]   # trials per batch
+  edge_cases:                # synthetic trials added to the pool
+    - {stimulus_id: "synthetic_anticipatory", is_ai: 1, user_choice: 1, response_time_ms: 120}
 
 dataset:
-  raw_logs_path: "data/sample/sample_logs.csv"
+  sample_logs_path: "data/sample/sample_logs.csv"
   jsonl_output_path: "data/raw/test_run.jsonl"
-  processed_output_path: "data/processed/metrics_summary.json"
-  sample_size_target: 30
-  real_ratio: 0.5
+  metadata_path: "data/raw/run_metadata.json"
+  processed_dir: "data/processed"
+  figures_dir: "reports/figures"
+
+stats:
+  bootstrap_iterations: 2000
+  ci_level: 95.0
+  iqr_factor: 1.5
 
 guardrails:
-  max_allowed_tir_percent: 15.0
+  max_allowed_tir_percent: 15.0   # max share of invalid trials
   min_valid_rt_ms: 200
   max_valid_rt_ms: 15000

@@ -1,37 +1,28 @@
-# Byte-compiled / optimized / DLL files (Python)
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Caches and Virtual Environments
+# Environments and caches
 .venv/
 venv/
 ENV/
 env/
 .pytest_cache/
 
-# Jupyter Notebook Checkpoints
-.ipynb_checkpoints
-*/.ipynb_checkpoints/*
+# Jupyter
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
 
-# Data & Temporary Log Files 
+# Logs and oversized raw dumps
 *.log
 *.tmp
-data/raw/*.tmpz
-data/processed/
-reports/figures/
+data/raw/*_full.jsonl
+data/raw/*.jsonl.gz
 
-# Node / JS / Web Caches 
-node_modules/
-npm-debug.log*
-
-# Operating System / IDE Specific Files
+# OS / IDE
 .DS_Store
-.DS_Store?
 ._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 .vscode/
 .idea/
