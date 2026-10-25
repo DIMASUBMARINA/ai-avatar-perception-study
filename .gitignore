@@ -14,14 +14,14 @@ env/
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 
-# Data & Temporary Log Files (Исправление замечания препода)
+# Data & Temporary Log Files 
 *.log
 *.tmp
 data/raw/*.tmpz
 data/processed/
 reports/figures/
 
-# Node / JS / Web Caches (если используются)
+# Node / JS / Web Caches 
 node_modules/
 npm-debug.log*
 

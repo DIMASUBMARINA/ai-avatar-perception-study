@@ -18,7 +18,6 @@ def bootstrap_ci(series: np.ndarray, n_bootstraps: int = 1000, ci: float = 95.0)
 
 def calculate_d_prime(hit_rate: float, fa_rate: float, n_signal: int, n_noise: int) -> float:
     """Calculates Signal Detection Theory Sensitivity Index (d') with Hautus loglinear correction."""
-    # Коррекция экстремальных значений (0 или 1) для избежания Z = +/- infinity
     adjusted_hr = np.clip(hit_rate, 0.5 / max(1, n_signal), 1.0 - 0.5 / max(1, n_signal))
     adjusted_far = np.clip(fa_rate, 0.5 / max(1, n_noise), 1.0 - 0.5 / max(1, n_noise))
     return float(norm.ppf(adjusted_hr) - norm.ppf(adjusted_far))
@@ -60,7 +59,6 @@ def process_and_aggregate(
         valid_group = group[group["is_valid"] == True]
         rts = valid_group["response_time_ms"].values
         
-        # Расчет ошибок по исправленной логике SDT (Positive = AI, Negative = Real)
         tp = ((valid_group["is_ai"] == 1) & (valid_group["user_choice"] == 1)).sum()
         tn = ((valid_group["is_ai"] == 0) & (valid_group["user_choice"] == 0)).sum()
         fp = ((valid_group["is_ai"] == 0) & (valid_group["user_choice"] == 1)).sum()
