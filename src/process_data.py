@@ -7,7 +7,7 @@ import pandas as pd
 from scipy import stats
 from scipy.stats import norm
 
-from common import ROOT, is_valid_trial, load_config, resolve
+from common import ROOT, is_valid_trial, load_config, max_rt_for, resolve, trials_path
 
 REQUIRED_LOG_COLUMNS = {
     "phase", "run_id", "load_level", "batch_latency_us", "n_invalid", "error_rate_pct", "runtime_error",
@@ -112,9 +112,10 @@ def aggregate_latency(df_bench: pd.DataFrame, cfg: dict, rng) -> pd.DataFrame:
 # ----------------------------------------------------------------------------- part 2: human perception (pilot)
 def load_human_trials(cfg: dict = None) -> pd.DataFrame:
     cfg = cfg or load_config()
-    df = pd.read_csv(resolve(cfg["dataset"]["sample_logs_path"]))
+    df = pd.read_csv(trials_path(cfg))
     g = cfg["guardrails"]
-    df["is_valid"] = [is_valid_trial(rt, g["min_valid_rt_ms"], g["max_valid_rt_ms"]) for rt in df["response_time_ms"]]
+    df["is_valid"] = [is_valid_trial(rt, g["min_valid_rt_ms"], max_rt_for(cond, g))
+                      for rt, cond in zip(df["response_time_ms"], df["condition"])]
     df["is_correct"] = (df["is_ai"] == df["user_choice"])
     df["is_iqr_outlier"] = False
     for cond, idx in df.groupby("condition").groups.items():
@@ -191,7 +192,7 @@ def process_and_aggregate(input_path=None, output_dir=None) -> dict:
     print("[STEP 2] Aggregating system latency (p50/p95/p99 + bootstrap 95% CI)")
     latency = aggregate_latency(bench, cfg, rng)
 
-    print("[STEP 3] Aggregating human perception metrics (pilot sample)")
+    print(f"[STEP 3] Aggregating human perception metrics from {trials_path(cfg)}")
     trials = load_human_trials(cfg)
     metrics = aggregate_human(trials, cfg, rng)
     tests = run_statistical_tests(trials)

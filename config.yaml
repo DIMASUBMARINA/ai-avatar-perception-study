@@ -12,7 +12,10 @@ benchmark:
     - {stimulus_id: "synthetic_anticipatory", is_ai: 1, user_choice: 1, response_time_ms: 120}
 
 dataset:
-  sample_logs_path: "data/sample/sample_logs.csv"
+  sample_logs_path: "data/sample/sample_logs.csv"      # pilot sample, used by the tests
+  # CSV analysed by process_data / visualize / notebook / benchmark. Pilot by default.
+  # After data collection: python src/import_web_data.py, then switch to "data/real/participant_trials.csv".
+  human_trials_path: "data/real/participant_trials.csv"
   jsonl_output_path: "data/raw/test_run.jsonl"
   metadata_path: "data/raw/run_metadata.json"
   processed_dir: "data/processed"
@@ -27,3 +30,7 @@ guardrails:
   max_allowed_tir_percent: 15.0   # max share of invalid trials
   min_valid_rt_ms: 200
   max_valid_rt_ms: 15000
+  # Optional per-condition upper limit. Without a time limit slow answers can be legitimate,
+  # so decide this threshold BEFORE looking at the real data. Example:
+  # max_valid_rt_ms_by_condition: {unrestricted: 60000}
+  max_valid_rt_ms_by_condition: {}

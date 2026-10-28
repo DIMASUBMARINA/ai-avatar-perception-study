@@ -22,6 +22,21 @@ def is_valid_trial(response_time_ms: float, min_rt: float, max_rt: float) -> boo
     return min_rt <= response_time_ms <= max_rt
 
 
+def max_rt_for(condition: str, guardrails: dict) -> float:
+    """Upper RT limit for a condition: per-condition override, else the global max_valid_rt_ms."""
+    overrides = guardrails.get("max_valid_rt_ms_by_condition") or {}
+    return overrides.get(condition, guardrails["max_valid_rt_ms"])
+
+
+def trials_path(cfg: dict = None) -> Path:
+    """CSV with human trials: env AVATAR_TRIALS_PATH, else dataset.human_trials_path, else sample_logs_path."""
+    env = os.environ.get("AVATAR_TRIALS_PATH")
+    if env:
+        return Path(env)
+    ds = (cfg or load_config())["dataset"]
+    return resolve(ds.get("human_trials_path") or ds["sample_logs_path"])
+
+
 def environment_metadata() -> dict:
     ram_gb = None
     try:

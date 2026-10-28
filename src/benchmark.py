@@ -9,7 +9,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from common import environment_metadata, is_valid_trial, load_config, resolve
+from common import environment_metadata, is_valid_trial, load_config, resolve, trials_path
 
 
 def evaluate_batch(batch: list, min_rt: float, max_rt: float) -> tuple:
@@ -27,7 +27,7 @@ def evaluate_batch(batch: list, min_rt: float, max_rt: float) -> tuple:
 
 def build_pool(config: dict) -> list:
     """Sample CSV trials plus synthetic edge cases from the config."""
-    sample = pd.read_csv(resolve(config["dataset"]["sample_logs_path"]))
+    sample = pd.read_csv(trials_path(config))
     pool = [
         (int(r.is_ai), int(r.user_choice), float(r.response_time_ms))
         for r in sample.itertuples(index=False)

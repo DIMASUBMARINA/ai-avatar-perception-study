@@ -22,6 +22,8 @@
 > **Статус данных.** Реальных данных участников пока нет. Анализ выполнен на **пилотном сэмпле**
 > (`data/sample/sample_logs.csv`: 8 проб в `3s_limit`, 2 в `unrestricted`), выводы по RQ1–RQ2 предварительные.
 > Нагрузочный бенчмарк (латентность функции обработки проб) основан на реальных замерах `src/benchmark.py`.
+> Сбор реальных данных — веб-стенд в папке [`web/`](web/README.md); как подключить результаты — в разделе
+> [Web-стенд и подключение реальных данных](#web-стенд-и-подключение-реальных-данных).
 
 ---
 
@@ -29,7 +31,9 @@
 
 ```text
 ai-avatar-perception-study/
+├── web/                            # Веб-стенд сбора данных (Node.js + Express), см. web/README.md
 ├── data/
+│   ├── real/                       # Реальные данные участников (после import_web_data.py)
 │   ├── raw/
 │   │   ├── test_run.jsonl          # Сырые замеры: phase = warmup | benchmark (350 записей)
 │   │   └── run_metadata.json       # Окружение (CPU, RAM, ОС, Python) и параметры запуска
@@ -49,9 +53,12 @@ ai-avatar-perception-study/
 │   ├── common.py                   # Конфиг, пути, правило валидации, метаданные окружения
 │   ├── benchmark.py                # Сбор замеров: warm-up + benchmark, JSONL
 │   ├── process_data.py             # Фильтр warm-up, агрегация, бутстреп-CI, guardrail, тесты
+│   ├── import_web_data.py          # Проверка и копирование CSV из web/ в data/real/
 │   └── visualize.py                # Публикационные графики
 ├── tests/
-│   └── test_pipeline.py            # Тесты пайплайна и требований Task 3
+│   ├── test_pipeline.py            # Тесты пайплайна и требований Task 3
+│   ├── test_integration.py         # Тесты формата данных веб-стенда, импорта и порогов по условиям
+│   └── fixtures/web_export_sample.csv   # Синтетический пример выгрузки веб-стенда
 ├── config.yaml                     # Параметры эксперимента (seed, нагрузка, guardrails)
 ├── environment.yml / requirements.txt / Dockerfile
 ├── .gitignore
@@ -108,6 +115,62 @@ docker run --rm --cpus=1 --memory=512m -v "$(pwd)/data:/app/data" -v "$(pwd)/rep
 Случайность зафиксирована: `random_seed: 42` в `config.yaml` управляет выборкой пачек и бутстрепом
 (`numpy.random.default_rng(42)`). Статистики и CI при повторной обработке одних и тех же данных совпадают;
 абсолютные значения латентности зависят от машины и от запуска `benchmark.py`.
+
+---
+
+## Web-стенд и подключение реальных данных
+
+Папка [`web/`](web/README.md) содержит сайт, который показывает участникам стимулы и записывает ответы в
+`web/data/participant_trials.csv`. Анализ (Python) и сбор данных (Node.js) разделены: связывает их только этот CSV-файл.
+
+### 1. Сбор данных
+
+```bash
+cd web
+npm install
+# положите изображения в web/stimuli/real и web/stimuli/ai (минимум TRIALS_PER_BLOCK * 2 каждого класса)
+npm start                                    # http://localhost:3000
+cloudflared tunnel --url http://localhost:3000   # публичная ссылка для участников (второе окно терминала)
+```
+
+Перед сбором удалите `web/data/participant_trials.csv`, если там остались пробные прохождения.
+
+### 2. Подключение к анализу (после окончания сбора)
+
+```bash
+python src/import_web_data.py        # проверяет формат, печатает сводку и копирует в data/real/participant_trials.csv
+```
+
+Затем в `config.yaml` переключите один путь:
+
+```yaml
+dataset:
+  human_trials_path: "data/real/participant_trials.csv"
+```
+
+и запустите `python src/benchmark.py && python src/process_data.py && python src/visualize.py`, затем заново выполните ноутбук
+(`jupyter nbconvert --to notebook --execute --inplace notebooks/01_data_analysis.ipynb`).
+Путь `human_trials_path` читают `process_data.py`, `visualize.py`, ноутбук и `benchmark.py`; для разового запуска его можно
+переопределить переменной окружения `AVATAR_TRIALS_PATH`. Пилотный файл `data/sample/sample_logs.csv` остаётся на месте:
+на нём построены тесты и пилотные таблицы ниже.
+
+### 3. Пороги валидности времени ответа
+
+Для всех проб действует `guardrails.min_valid_rt_ms .. max_valid_rt_ms` (200–15000 мс). В условии `unrestricted` ограничения
+по времени нет, и долгие ответы могут быть нормальными, поэтому для него можно задать свой верхний порог:
+
+```yaml
+guardrails:
+  max_valid_rt_ms_by_condition: {unrestricted: 60000}
+```
+
+Значение выберите **до** просмотра реальных данных и зафиксируйте в отчёте. По умолчанию словарь пуст, и порог один для всех.
+`import_web_data.py` показывает долю невалидных проб (TIR) по условиям при текущих порогах.
+
+### 4. Что обновить в отчёте после перехода на реальные данные
+* заменить блок «Статус данных» и таблицу 1 в этом README;
+* помнить, что `process_data.py` пока считает пробы независимыми (Fisher, Mann–Whitney, бутстреп по пробам),
+  а участники проходят оба условия — для итоговых выводов нужны парные тесты или бутстреп по участникам.
 
 ---
 
