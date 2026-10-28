@@ -15,7 +15,7 @@ dataset:
   sample_logs_path: "data/sample/sample_logs.csv"      # pilot sample, used by the tests
   # CSV analysed by process_data / visualize / notebook / benchmark. Pilot by default.
   # After data collection: python src/import_web_data.py, then switch to "data/real/participant_trials.csv".
-  human_trials_path: "data/real/participant_trials.csv"
+  human_trials_path: "data/sample/sample_logs.csv"
   jsonl_output_path: "data/raw/test_run.jsonl"
   metadata_path: "data/raw/run_metadata.json"
   processed_dir: "data/processed"
@@ -34,3 +34,6 @@ guardrails:
   # so decide this threshold BEFORE looking at the real data. Example:
   # max_valid_rt_ms_by_condition: {unrestricted: 60000}
   max_valid_rt_ms_by_condition: {}
+  # Rules for the real (web) data; they are skipped when the columns are absent (pilot file).
+  exclude_focus_lost: true          # trials where the participant switched tabs / minimised the window
+  max_exposure_overshoot_ms: 150    # 3s_limit: face visible longer than limit + this = timer failure

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from common import ROOT, is_valid_trial, load_config, max_rt_for
+from common import ROOT, load_config, max_rt_for, trial_flags
 
 REQUIRED = ["participant_id", "condition", "stimulus_id", "is_ai", "user_choice", "response_time_ms"]
 CONDITIONS = {"3s_limit", "unrestricted"}
@@ -49,11 +49,12 @@ def summarize(df: pd.DataFrame, cfg: dict) -> None:
     dup = df.duplicated(["participant_id", "stimulus_id"]).sum()
     if dup:
         print(f"WARNING: {dup} repeated (participant, stimulus) pairs")
+    flags = trial_flags(df, cfg)
     for cond, grp in df.groupby("condition"):
-        invalid = sum(not is_valid_trial(rt, g["min_valid_rt_ms"], max_rt_for(cond, g))
-                      for rt in grp["response_time_ms"])
-        print(f"  {cond:<13} trials={len(grp):<5} invalid(TIR)={100.0 * invalid / len(grp):.1f}% "
-              f"(limit {g['min_valid_rt_ms']}..{max_rt_for(cond, g)} ms)")
+        f = flags.loc[grp.index]
+        print(f"  {cond:<13} trials={len(grp):<5} excluded={100.0 * f.any(axis=1).mean():.1f}%  "
+              f"[rt {100.0 * f['invalid_rt'].mean():.1f}% (limit {g['min_valid_rt_ms']}..{max_rt_for(cond, g)} ms), "
+              f"focus {100.0 * f['invalid_focus'].mean():.1f}%, exposure {100.0 * f['invalid_exposure'].mean():.1f}%]")
 
 
 def main(argv=None) -> int:

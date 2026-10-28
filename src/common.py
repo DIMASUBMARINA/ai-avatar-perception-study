@@ -3,6 +3,7 @@ import os
 import platform
 from pathlib import Path
 
+import pandas as pd
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,3 +53,30 @@ def environment_metadata() -> dict:
         "cpu_count": os.cpu_count(),
         "ram_gb": ram_gb,
     }
+
+
+def trial_flags(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Boolean exclusion flags per trial (True = the trial breaks a rule). One column per reason.
+
+    invalid_rt        response time outside min..max (the max may be set per condition)
+    invalid_focus     the tab lost focus during the trial (needs a focus_lost column, rule exclude_focus_lost)
+    invalid_exposure  3s_limit only: the face stayed on screen longer than the limit + max_exposure_overshoot_ms
+                      (needs an exposure_ms column); early answers (shorter exposure) are fine
+    Rules whose column is missing (e.g. the pilot file) are skipped.
+    """
+    g = cfg["guardrails"]
+    flags = pd.DataFrame(index=df.index)
+    flags["invalid_rt"] = [not is_valid_trial(rt, g["min_valid_rt_ms"], max_rt_for(cond, g))
+                           for rt, cond in zip(df["response_time_ms"], df["condition"])]
+    if g.get("exclude_focus_lost") and "focus_lost" in df.columns:
+        flags["invalid_focus"] = pd.to_numeric(df["focus_lost"], errors="coerce").fillna(0).astype(int) == 1
+    else:
+        flags["invalid_focus"] = False
+    tol = g.get("max_exposure_overshoot_ms")
+    if tol is not None and "exposure_ms" in df.columns:
+        limit = cfg["experiment"]["viewing_time_limit_ms"]
+        exposure = pd.to_numeric(df["exposure_ms"], errors="coerce")
+        flags["invalid_exposure"] = ((df["condition"] == "3s_limit") & (exposure > limit + tol)).fillna(False)
+    else:
+        flags["invalid_exposure"] = False
+    return flags

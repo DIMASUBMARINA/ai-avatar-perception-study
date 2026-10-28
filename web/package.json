@@ -6,9 +6,13 @@
   "scripts": {
     "start": "node server.js",
     "demo-stimuli": "node scripts/make_demo_stimuli.js",
-    "test": "node scripts/smoke_test.js"
+    "test": "node scripts/trial_logic_test.js && node scripts/smoke_test.js"
   },
-  "engines": { "node": ">=18" },
-  "dependencies": { "express": "^4.19.2" },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
   "license": "MIT"
 }

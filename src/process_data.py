@@ -7,7 +7,7 @@ import pandas as pd
 from scipy import stats
 from scipy.stats import norm
 
-from common import ROOT, is_valid_trial, load_config, max_rt_for, resolve, trials_path
+from common import ROOT, load_config, resolve, trial_flags, trials_path
 
 REQUIRED_LOG_COLUMNS = {
     "phase", "run_id", "load_level", "batch_latency_us", "n_invalid", "error_rate_pct", "runtime_error",
@@ -113,9 +113,9 @@ def aggregate_latency(df_bench: pd.DataFrame, cfg: dict, rng) -> pd.DataFrame:
 def load_human_trials(cfg: dict = None) -> pd.DataFrame:
     cfg = cfg or load_config()
     df = pd.read_csv(trials_path(cfg))
-    g = cfg["guardrails"]
-    df["is_valid"] = [is_valid_trial(rt, g["min_valid_rt_ms"], max_rt_for(cond, g))
-                      for rt, cond in zip(df["response_time_ms"], df["condition"])]
+    flags = trial_flags(df, cfg)
+    df = pd.concat([df, flags], axis=1)
+    df["is_valid"] = ~flags.any(axis=1)
     df["is_correct"] = (df["is_ai"] == df["user_choice"])
     df["is_iqr_outlier"] = False
     for cond, idx in df.groupby("condition").groups.items():

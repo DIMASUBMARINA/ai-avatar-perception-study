@@ -91,3 +91,38 @@ def test_import_rejects_bad_files(tmp_path, mutate, expected):
     res = _run_import("--src", bad, "--dst", tmp_path / "out.csv")
     assert res.returncode != 0 and expected in res.stdout
     assert not (tmp_path / "out.csv").exists()
+
+
+def _write(tmp_path, rows):
+    csv = tmp_path / "t.csv"
+    pd.DataFrame(rows).to_csv(csv, index=False)
+    return csv
+
+
+def test_focus_lost_and_exposure_overshoot_are_flagged(monkeypatch, tmp_path):
+    import process_data as p
+    monkeypatch.delenv("AVATAR_TRIALS_PATH", raising=False)
+    base = dict(participant_id="P1", stimulus_id="s", is_ai=1, user_choice=1)
+    csv = _write(tmp_path, [
+        dict(base, condition="3s_limit", response_time_ms=1000, exposure_ms=1000, focus_lost=0),      # ok, early answer
+        dict(base, condition="3s_limit", response_time_ms=4000, exposure_ms=3010, focus_lost=0),      # ok, timer hid the face
+        dict(base, condition="3s_limit", response_time_ms=4000, exposure_ms=3400, focus_lost=0),      # timer failure
+        dict(base, condition="3s_limit", response_time_ms=1500, exposure_ms=1500, focus_lost=1),      # tab switched
+        dict(base, condition="unrestricted", response_time_ms=9000, exposure_ms=9000, focus_lost=0),  # ok: no exposure rule here
+    ])
+    df = p.load_human_trials(_cfg_with(csv))
+    assert df["is_valid"].tolist() == [True, True, False, False, True]
+    assert df["invalid_exposure"].tolist() == [False, False, True, False, False]
+    assert df["invalid_focus"].tolist() == [False, False, False, True, False]
+    # rules can be switched off in the config
+    off = p.load_human_trials(_cfg_with(csv, exclude_focus_lost=False, max_exposure_overshoot_ms=None))
+    assert off["is_valid"].all()
+
+
+def test_rules_are_skipped_without_columns(monkeypatch):
+    """The pilot file has no focus_lost / exposure_ms columns: the rules must not break or exclude anything."""
+    import process_data as p
+    from common import load_config
+    monkeypatch.delenv("AVATAR_TRIALS_PATH", raising=False)
+    df = p.load_human_trials(load_config())
+    assert not df[["invalid_focus", "invalid_exposure"]].any().any()

@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["sh", "-c", "python src/benchmark.py && python src/process_data.py && python src/visualize.py"]
+CMD ["sh", "-c", "python src/benchmark.py && python src/process_data.py && python src/participant_level.py && python src/visualize.py"]

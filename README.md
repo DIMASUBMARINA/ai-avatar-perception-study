@@ -40,7 +40,9 @@ ai-avatar-perception-study/
 │   ├── processed/
 │   │   ├── metrics_summary.csv     # Метрики восприятия по условиям (Acc, FPR, FNR, d', RT, TIR + 95% CI)
 │   │   ├── latency_by_load.csv     # Латентность p50/p95/p99 по уровням нагрузки + 95% CI
-│   │   └── statistical_tests.csv   # Fisher exact, Mann–Whitney
+│   │   ├── statistical_tests.csv   # Fisher exact, Mann–Whitney (пробы как независимые, только пилот)
+│   │   ├── participant_table.csv   # Метрики по участнику и условию (participant_level.py)
+│   │   └── participant_level_tests.csv   # Парные тесты и бутстреп-ДИ по участникам
 │   └── sample/
 │       └── sample_logs.csv         # Пилотные пробы участников
 ├── docs/
@@ -54,10 +56,12 @@ ai-avatar-perception-study/
 │   ├── benchmark.py                # Сбор замеров: warm-up + benchmark, JSONL
 │   ├── process_data.py             # Фильтр warm-up, агрегация, бутстреп-CI, guardrail, тесты
 │   ├── import_web_data.py          # Проверка и копирование CSV из web/ в data/real/
+│   ├── participant_level.py        # Анализ на уровне участников: парные тесты, бутстреп по участникам
 │   └── visualize.py                # Публикационные графики
 ├── tests/
 │   ├── test_pipeline.py            # Тесты пайплайна и требований Task 3
-│   ├── test_integration.py         # Тесты формата данных веб-стенда, импорта и порогов по условиям
+│   ├── test_integration.py         # Тесты формата данных веб-стенда, импорта, правил исключения проб
+│   ├── test_participant_level.py   # Тесты анализа на уровне участников
 │   └── fixtures/web_export_sample.csv   # Синтетический пример выгрузки веб-стенда
 ├── config.yaml                     # Параметры эксперимента (seed, нагрузка, guardrails)
 ├── environment.yml / requirements.txt / Dockerfile
@@ -148,29 +152,51 @@ dataset:
   human_trials_path: "data/real/participant_trials.csv"
 ```
 
-и запустите `python src/benchmark.py && python src/process_data.py && python src/visualize.py`, затем заново выполните ноутбук
+и запустите `python src/benchmark.py && python src/process_data.py && python src/participant_level.py && python src/visualize.py`, затем заново выполните ноутбук
 (`jupyter nbconvert --to notebook --execute --inplace notebooks/01_data_analysis.ipynb`).
 Путь `human_trials_path` читают `process_data.py`, `visualize.py`, ноутбук и `benchmark.py`; для разового запуска его можно
 переопределить переменной окружения `AVATAR_TRIALS_PATH`. Пилотный файл `data/sample/sample_logs.csv` остаётся на месте:
 на нём построены тесты и пилотные таблицы ниже.
 
-### 3. Пороги валидности времени ответа
+### 3. Время ответа и правила исключения проб
 
-Для всех проб действует `guardrails.min_valid_rt_ms .. max_valid_rt_ms` (200–15000 мс). В условии `unrestricted` ограничения
-по времени нет, и долгие ответы могут быть нормальными, поэтому для него можно задать свой верхний порог:
+В обоих условиях `response_time_ms` отсчитывается от момента, когда лицо и кнопки отрисованы, поэтому время сопоставимо между
+условиями. В `3s_limit` участник может ответить сразу (лицо исчезает в момент ответа); если за 3 секунды ответа нет, лицо
+исчезает само, а кнопки остаются. `exposure_ms` — сколько лицо было на экране.
 
-```yaml
-guardrails:
-  max_valid_rt_ms_by_condition: {unrestricted: 60000}
+Проба считается невалидной (`is_valid = False`) и не входит в метрики, но **учитывается в TIR** (доля невалидных), если:
+
+| Правило | Настройка в `config.yaml` |
+|---|---|
+| время ответа вне `min_valid_rt_ms .. max_valid_rt_ms` (200–15000 мс) | `guardrails.min_valid_rt_ms`, `max_valid_rt_ms` |
+| участник переключал вкладку (`focus_lost = 1`) | `guardrails.exclude_focus_lost: true` |
+| в `3s_limit` лицо оставалось на экране дольше лимита + допуск (сбой таймера) | `guardrails.max_exposure_overshoot_ms: 150` |
+
+Если лимит 15000 мс слишком жёсткий для свободного просмотра, поднимите его: общим значением `max_valid_rt_ms` или отдельно для условия
+(`max_valid_rt_ms_by_condition: {unrestricted: 60000}`). Значения выберите **до** просмотра реальных данных и зафиксируйте в отчёте:
+исключение медленных проб только в одном условии завышает его точность. Для контроля в `participant_table.csv` есть `accuracy_all_pct`
+(точность по всем пробам без исключений) — если выводы меняются при исключениях, это нужно обсуждать.
+`import_web_data.py` показывает долю исключённых проб по условиям и причинам. Правила пропускаются, если нужных колонок нет (пилотный файл);
+значение `experiment.viewing_time_limit_ms` должно совпадать с `VIEW_LIMIT_MS` веб-части.
+
+### 4. Анализ на уровне участников (основной для реальных данных)
+
+Каждый участник проходит оба условия, поэтому пробы одного человека зависимы. Скрипт `src/participant_level.py` считает
+точность, FPR, FNR и медианное время по участнику и условию, сравнивает условия парным критерием Уилкоксона, проверяет точность
+против 50% и строит бутстреп-ДИ по участникам (а не по пробам):
+
+```bash
+python src/participant_level.py      # -> data/processed/participant_table.csv, participant_level_tests.csv
 ```
 
-Значение выберите **до** просмотра реальных данных и зафиксируйте в отчёте. По умолчанию словарь пуст, и порог один для всех.
-`import_web_data.py` показывает долю невалидных проб (TIR) по условиям при текущих порогах.
+Основной показатель RQ1 — точность (`accuracy_pct`); остальные метрики исследовательские, поправка на множественные сравнения не вводится.
+При менее чем 6 участниках скрипт p-значения не считает и пишет причину в колонке `note`. Таблица 1 ниже (`process_data.py`, `statistical_tests.csv`)
+считает пробы независимыми и годится только для пилота.
 
-### 4. Что обновить в отчёте после перехода на реальные данные
+### 5. Что обновить в отчёте после перехода на реальные данные
 * заменить блок «Статус данных» и таблицу 1 в этом README;
-* помнить, что `process_data.py` пока считает пробы независимыми (Fisher, Mann–Whitney, бутстреп по пробам),
-  а участники проходят оба условия — для итоговых выводов нужны парные тесты или бутстреп по участникам.
+* пилотный файл `data/sample/sample_logs.csv` не содержит `exposure_ms` и `focus_lost` и не документирует, как измерялось время ответа:
+  его нельзя объединять с данными веб-стенда.
 
 ---
 
