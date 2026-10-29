@@ -11,10 +11,10 @@ let session = null;
 const responses = [];
 
 const INTRO = {
-  '3s_limit': ['Короткий показ', 'Лицо покажется не дольше чем на 3 секунды. Отвечайте, как только решите: после ответа лицо сразу исчезнет. Если не успеете, оно исчезнет само, а кнопки останутся.',
-    'Отвечайте по первому впечатлению.'],
-  unrestricted: ['Свободный просмотр', 'Лицо останется на экране, пока вы не ответите. Смотрите столько, сколько нужно.',
-    'Точность важнее скорости.'],
+  '3s_limit': ['Short exposure', 'The face is shown for at most 3 seconds. Answer as soon as you have decided: the face disappears right after your answer. If you do not answer in time, it disappears by itself and the buttons stay.',
+    'Go with your first impression.'],
+  unrestricted: ['Free viewing', 'The face stays on screen until you answer. Look for as long as you need.',
+    'Accuracy matters more than speed.'],
 };
 
 async function init() {
@@ -33,7 +33,7 @@ $('#start').onclick = async () => {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.status);
     session = j;
-  } catch (e) { return fail('Не удалось начать: ' + e.message, () => $('#start').onclick()); }
+  } catch (e) { return fail('Could not start: ' + e.message, () => $('#start').onclick()); }
   $('#startNote').hidden = true;
   await runExperiment();
 };
@@ -97,16 +97,16 @@ async function runExperiment() {
   layoutButtons();
   for (const [bi, block] of session.blocks.entries()) {
     const [title, text, hint] = INTRO[block.condition];
-    $('#introTitle').textContent = `Блок ${bi + 1} из ${session.blocks.length}: ${title}`;
+    $('#introTitle').textContent = `Block ${bi + 1} of ${session.blocks.length}: ${title}`;
     $('#introText').textContent = text; $('#introHint').textContent = hint;
     show('intro');
-    $('#introGo').disabled = true; $('#introGo').textContent = 'Загрузка...';
+    $('#introGo').disabled = true; $('#introGo').textContent = 'Loading...';
     await preload(block.trials);
-    $('#introGo').disabled = false; $('#introGo').textContent = 'Начать блок';
+    $('#introGo').disabled = false; $('#introGo').textContent = 'Start block';
     await waitClick($('#introGo'));
     show('trial'); $('#keyHint').hidden = matchMedia('(pointer: coarse)').matches;
     for (const [ti, t] of block.trials.entries()) {
-      const r = await runTrial(t, block.condition, `Блок ${bi + 1} из ${session.blocks.length} · проба ${ti + 1} из ${block.trials.length}`);
+      const r = await runTrial(t, block.condition, `Block ${bi + 1} of ${session.blocks.length} · trial ${ti + 1} of ${block.trials.length}`);
       responses.push(r);
     }
   }
@@ -118,7 +118,7 @@ async function save() {
     const r = await post(`/api/session/${session.session_id}/finish`, { responses });
     if (r.ok || r.status === 409) return show('done');   // 409: already stored on an earlier attempt
     throw new Error((await r.json()).error || r.status);
-  } catch (e) { fail('Ответы не сохранились (' + e.message + '). Проверьте соединение и повторите.', save); }
+  } catch (e) { fail('Your answers were not saved (' + e.message + '). Check your connection and retry.', save); }
 }
 
 init();

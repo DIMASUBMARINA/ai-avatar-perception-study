@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Эксперимент: настоящее лицо или ИИ</title>
+<title>Experiment: real face or AI?</title>
 <style>
   :root {
     --ground: #edeff2; --ink: #1d2733; --muted: #5b6673; --line: #cbd1d8;
@@ -43,64 +43,64 @@
 </head>
 <body>
 <main>
-  <div id="demo" class="banner" hidden>Демо-режим: вместо лиц показаны картинки-заглушки. Данные для исследования так собирать нельзя.</div>
+  <div id="demo" class="banner" hidden>Demo mode: placeholder pictures are shown instead of faces. Do not collect study data this way.</div>
 
   <section id="v-consent">
-    <h1>Настоящее лицо или сгенерировано ИИ?</h1>
-    <p>Мы изучаем, как студенты отличают фотографии реальных людей от лиц, созданных нейросетью, и как на это влияет время просмотра.</p>
+    <h1>Real face or AI-generated?</h1>
+    <p>We are studying how students tell photographs of real people from faces created by a neural network, and how viewing time affects this.</p>
     <ul>
-      <li>Вам покажут несколько десятков лиц, по одному. Нужно выбрать: «Реальное фото» или «Создано ИИ».</li>
-      <li>Это займёт около 5–7 минут. В половине проб лицо показывается не дольше 3 секунд, в остальных столько, сколько нужно.</li>
-      <li>Участие добровольное, прервать его можно в любой момент, закрыв страницу: неполные данные не сохраняются.</li>
-      <li>Мы не собираем имя, почту и другие личные данные. Сохраняются только ваши ответы, время ответа, факультет (общая группа) и тип устройства.</li>
+      <li>You will be shown a few dozen faces, one at a time. For each one, choose “Real photo” or “AI-generated”.</li>
+      <li>It takes about 5–7 minutes. In half of the trials the face is shown for at most 3 seconds; in the others for as long as you need.</li>
+      <li>Participation is voluntary. You can stop at any time by closing the page: incomplete data is not saved.</li>
+      <li>We do not collect your name, e-mail or other personal data. Only your answers, response times, field of study (a general group) and device type are saved.</li>
     </ul>
-    <label class="row"><input type="checkbox" id="agree"><span>Мне 18 лет или больше, я прочитал(а) описание и согласен(на) участвовать.</span></label>
-    <button class="primary" id="toProfile" disabled>Продолжить</button>
+    <label class="row"><input type="checkbox" id="agree"><span>I am 18 or older, I have read the description and I agree to take part.</span></label>
+    <button class="primary" id="toProfile" disabled>Continue</button>
   </section>
 
   <section id="v-profile" hidden>
-    <h2>Один вопрос о вас</h2>
-    <p class="muted">Нужен только для сравнения групп.</p>
-    <label for="major"><strong>Направление обучения</strong></label><br>
+    <h2>One question about you</h2>
+    <p class="muted">Used only to compare groups.</p>
+    <label for="major"><strong>Field of study</strong></label><br>
     <select id="major">
-      <option value="" selected disabled>Выберите</option>
-      <option value="IT">IT и технические науки</option>
-      <option value="Humanities">Гуманитарные науки</option>
-      <option value="Other">Другое</option>
+      <option value="" selected disabled>Select</option>
+      <option value="IT">IT and technical sciences</option>
+      <option value="Humanities">Humanities</option>
+      <option value="Other">Other</option>
     </select><br>
-    <button class="primary" id="start" disabled>Начать</button>
-    <p id="startNote" class="muted" hidden>Подготовка...</p>
+    <button class="primary" id="start" disabled>Start</button>
+    <p id="startNote" class="muted" hidden>Preparing...</p>
   </section>
 
   <section id="v-intro" hidden>
     <h2 id="introTitle"></h2>
     <p id="introText"></p>
     <p class="muted" id="introHint"></p>
-    <button class="primary" id="introGo">Начать блок</button>
+    <button class="primary" id="introGo">Start block</button>
   </section>
 
   <section id="v-trial" hidden>
     <div id="progress" class="muted" aria-live="polite"></div>
-    <div id="stage" role="img" aria-label="Область показа лица">
+    <div id="stage" role="img" aria-label="Face display area">
       <span id="fix" hidden>+</span>
       <img id="stim" alt="" hidden draggable="false">
     </div>
     <div id="answers" hidden>
-      <button type="button" data-choice="0" id="btnReal">Реальное фото</button>
-      <button type="button" data-choice="1" id="btnAi">Создано ИИ</button>
+      <button type="button" data-choice="0" id="btnReal">Real photo</button>
+      <button type="button" data-choice="1" id="btnAi">AI-generated</button>
     </div>
-    <p class="hint muted" id="keyHint" hidden>Можно отвечать клавишами ← и →</p>
+    <p class="hint muted" id="keyHint" hidden>You can answer with the ← and → keys</p>
   </section>
 
   <section id="v-done" hidden>
-    <h1>Готово, спасибо!</h1>
-    <p>Ваши ответы сохранены. Закройте страницу.</p>
+    <h1>Done, thank you!</h1>
+    <p>Your answers have been saved. You can close the page.</p>
   </section>
 
   <section id="v-error" hidden>
-    <h2>Не удалось сохранить</h2>
+    <h2>Could not save</h2>
     <p id="errText"></p>
-    <button class="primary" id="retry">Повторить</button>
+    <button class="primary" id="retry">Retry</button>
   </section>
 </main>
 <script src="app.js"></script>

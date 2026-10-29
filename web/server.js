@@ -64,9 +64,9 @@ app.get('/stim/:id', (req, res) => {
 
 app.post('/api/session', (req, res) => {
   const { major, device_type } = req.body || {};
-  if (!MAJORS.includes(major) || !['mobile', 'pc'].includes(device_type)) return res.status(400).json({ error: 'Некорректный профиль' });
+  if (!MAJORS.includes(major) || !['mobile', 'pc'].includes(device_type)) return res.status(400).json({ error: 'Invalid profile' });
   if (stim.byClass.real.length < TPB || stim.byClass.ai.length < TPB)
-    return res.status(500).json({ error: `Нужно минимум ${TPB} изображений в stimuli/real и в stimuli/ai` });
+    return res.status(500).json({ error: `At least ${TPB} images are required in stimuli/real and in stimuli/ai` });
   const half = TPB / 2, real = shuffle(stim.byClass.real.slice()), ai = shuffle(stim.byClass.ai.slice());
   const order = started++ % 2 === 0 ? ['3s_limit', 'unrestricted'] : ['unrestricted', '3s_limit'];
   const blocks = order.map((condition, b) => ({   // disjoint stimuli per block, 1:1 real/AI in each
@@ -82,17 +82,17 @@ app.post('/api/session', (req, res) => {
 
 app.post('/api/session/:id/finish', (req, res) => {
   const s = sessions.get(req.params.id);
-  if (!s) return res.status(404).json({ error: 'Сессия не найдена' });
-  if (s.done) return res.status(409).json({ error: 'Уже сохранено' });
+  if (!s) return res.status(404).json({ error: 'Session not found' });
+  if (s.done) return res.status(409).json({ error: 'Already saved' });
   const resp = (req.body || {}).responses;
   const expected = s.blocks.flatMap((b, bi) => b.trials.map((t, ti) => ({ ...t, condition: b.condition, bi, ti })));
-  if (!Array.isArray(resp) || resp.length !== expected.length) return res.status(400).json({ error: 'Неполные данные' });
+  if (!Array.isArray(resp) || resp.length !== expected.length) return res.status(400).json({ error: 'Incomplete data' });
   const byId = new Map(resp.map(r => [r.stimulus_id, r]));
   const now = new Date().toISOString();
   const rows = [];
   for (const e of expected) {
     const r = byId.get(e.stimulus_id);
-    if (!r || ![0, 1].includes(r.choice) || !Number.isFinite(r.rt_ms) || r.rt_ms < 0 || r.rt_ms > 6e5) return res.status(400).json({ error: 'Некорректный ответ' });
+    if (!r || ![0, 1].includes(r.choice) || !Number.isFinite(r.rt_ms) || r.rt_ms < 0 || r.rt_ms > 6e5) return res.status(400).json({ error: 'Invalid answer' });
     const truth = stim.map.get(e.stimulus_id);
     rows.push([req.params.id, e.condition, s.order[0] === '3s_limit' ? '3s_first' : 'unrestricted_first', e.bi, e.ti,
       e.stimulus_id, truth.is_ai, truth.generator, r.choice, r.rt_ms,

@@ -1,80 +1,80 @@
-# Веб-эксперимент: распознавание AI-аватаров (показ до 3 секунд vs без ограничения)
+# Web experiment: recognising AI avatars (up to 3 seconds vs unrestricted viewing)
 
-Node.js + Express, без базы данных: завершённые сессии дописываются в `data/participant_trials.csv`.
-Формат файла совместим с `src/process_data.py` проекта (колонки `participant_id, condition, stimulus_id, is_ai, user_choice, response_time_ms`).
+Node.js + Express, no database: finished sessions are appended to `data/participant_trials.csv`.
+The file format is compatible with the project's `src/process_data.py` (columns `participant_id, condition, stimulus_id, is_ai, user_choice, response_time_ms`).
 
-## Запуск
+## Running
 
 ```bash
 npm install
-npm run demo-stimuli     # только для пробы: 24+24 картинки-заглушки (не лица)
+npm run demo-stimuli     # only for a trial run: 24+24 placeholder pictures (not faces)
 npm start                # http://localhost:3000
-npm test                 # сквозная проверка сервера и формата данных
+npm test                 # end-to-end check of the server and the data format
 ```
 
-Для сбора данных: **удалите `stimuli/*/demo_*`** и положите реальные изображения в `stimuli/real/` и `stimuli/ai/`
-(`.jpg .jpeg .png .webp`). Нужно минимум `TRIALS_PER_BLOCK` картинок каждого класса (по умолчанию 20; больше — лучше,
-тогда у участников разные наборы). Подпапка внутри `stimuli/ai/` (например `stimuli/ai/stylegan3/`) пишется в колонку `generator`.
-Пока в папке есть файлы с `demo` в имени, на странице висит красный баннер.
+To collect data, **delete `stimuli/*/demo_*`** and put the real images into `stimuli/real/` and `stimuli/ai/`
+(`.jpg .jpeg .png .webp`). At least `TRIALS_PER_BLOCK` images per class are needed (20 by default; more is better,
+because then participants get different sets). A subfolder inside `stimuli/ai/` (for example `stimuli/ai/stylegan3/`) is written to the `generator` column.
+While the folders contain files with `demo` in their name, a red banner is shown on the page.
 
-Подготовка стимулов одной командой (нужен `pip install pillow`):
+Stimuli can be prepared with one command (requires `pip install pillow`):
 
 ```bash
-python scripts/prepare_stimuli.py --real путь/к/реальным --ai путь/к/сгенерированным --generator stylegan3
+python scripts/prepare_stimuli.py --real path/to/real --ai path/to/generated --generator stylegan3
 ```
 
-Скрипт берёт одинаковое число картинок каждого класса (реальные выбираются случайно, seed 42), приводит оба класса к одному размеру
-и формату (по умолчанию 512×512 JPEG q=92, метаданные убираются), раскладывает по `stimuli/real` и `stimuli/ai/<generator>`,
-удаляет демо-заглушки и пишет `stimuli/manifest.csv` (исходный файл → новый). Перед запуском уберите из входных папок
-изображения с явными артефактами. Изображения не коммитятся (`.gitignore`), `manifest.csv` можно коммитить.
+The script takes the same number of images from each class (real ones are chosen randomly, seed 42), converts both classes to the same size
+and format (512×512 JPEG, quality 92 by default, metadata stripped), places them into `stimuli/real` and `stimuli/ai/<generator>`,
+removes the demo placeholders and writes `stimuli/manifest.csv` (source file → new file). Before running it, remove images with obvious artefacts
+from the input folders. Images are not committed (`.gitignore`); `manifest.csv` may be committed.
 
-Настройки через переменные окружения: `PORT`, `TRIALS_PER_BLOCK` (чётное, по умолчанию 20), `VIEW_LIMIT_MS` (3000), `DATA_DIR`, `STIM_DIR`.
+Settings are given through environment variables: `PORT`, `TRIALS_PER_BLOCK` (even, 20 by default), `VIEW_LIMIT_MS` (3000), `DATA_DIR`, `STIM_DIR`.
 
-## Как устроен эксперимент
+## How the experiment works
 
-- Согласие (18+, анонимно) → направление (IT / гуманитарное / другое) → два блока → сохранение.
-- Внутри участника оба условия. Порядок блоков чередуется по приходу участников: `3s_first` и `unrestricted_first` (AB/BA).
-- В каждом блоке 1:1 real/AI, стимулы блоков не пересекаются, порядок проб случайный.
-- Сторона кнопок («Реальное фото» слева или справа) случайна для участника: колонка `button_layout`.
-- Правда (`is_ai`) хранится только на сервере, картинки отдаются по хеш-идентификаторам: по именам файлов класс не узнать.
-- **3s_limit:** картинка и кнопки появляются вместе. Участник может ответить сразу: тогда картинка исчезает в момент ответа.
-  Если ответа нет за 3 с, картинка исчезает сама, а кнопки остаются, и ответ принимается после этого.
-  **unrestricted:** картинка остаётся, пока участник не ответит.
-- **Определение RT** (запишите в отчёт): в обоих условиях `response_time_ms` отсчитывается от момента, когда картинка и кнопки отрисованы,
-  поэтому значения сопоставимы между условиями. `exposure_ms` — сколько картинка была на экране:
-  в `unrestricted` равно RT, в `3s_limit` равно RT при раннем ответе и ~3000–3020 мс, если картинка исчезла по таймеру
-  (значения заметно выше лимита означают сбой таймера, например из-за свёрнутой вкладки).
-- `focus_lost = 1`, если вкладка теряла фокус во время пробы (кандидат на исключение).
+- Consent (18+, anonymous) → field of study (IT / humanities / other) → two blocks → saving.
+- Every participant takes both conditions. The block order alternates with the arrival of participants: `3s_first` and `unrestricted_first` (AB/BA).
+- Each block is 1:1 real/AI, the stimuli of the two blocks do not overlap, and the order of trials is random.
+- The side of the answer buttons ("Real photo" on the left or on the right) is random per participant: column `button_layout`.
+- The truth (`is_ai`) is stored on the server only, and images are served under hashed identifiers: the class cannot be learned from file names.
+- **3s_limit:** the picture and the buttons appear together. The participant can answer immediately, and then the picture disappears at the moment of the answer.
+  If there is no answer within 3 s, the picture disappears by itself, the buttons stay, and the answer is accepted afterwards.
+  **unrestricted:** the picture stays until the participant answers.
+- **Definition of RT** (put it in the report): in both conditions `response_time_ms` is measured from the moment the picture and the buttons are painted,
+  so the values are comparable between conditions. `exposure_ms` is how long the picture was on screen:
+  in `unrestricted` it equals RT; in `3s_limit` it equals RT for an early answer and ~3000–3020 ms if the picture was hidden by the timer
+  (values clearly above the limit mean a timer failure, for example because of a minimised tab).
+- `focus_lost = 1` if the tab lost focus during the trial (a candidate for exclusion).
 
-## Колонки `data/participant_trials.csv`
+## Columns of `data/participant_trials.csv`
 
-| Колонка | Смысл |
+| Column | Meaning |
 |---|---|
-| `participant_id` | случайный id, личных данных нет |
-| `condition` | `3s_limit` или `unrestricted` |
-| `block_order`, `block_index`, `trial_index` | порядок блоков, номер блока, номер пробы в блоке |
-| `stimulus_id`, `is_ai`, `generator` | стимул, истина (1 = AI), источник |
-| `user_choice` | ответ: 1 = «Создано ИИ», 0 = «Реальное фото» |
-| `response_time_ms`, `exposure_ms`, `focus_lost` | время ответа, время показа, потеря фокуса |
-| `button_layout`, `major`, `device_type` | раскладка кнопок, направление, `mobile`/`pc` |
-| `submitted_at` | время сохранения (UTC) |
+| `participant_id` | random id, no personal data |
+| `condition` | `3s_limit` or `unrestricted` |
+| `block_order`, `block_index`, `trial_index` | block order, block number, trial number within the block |
+| `stimulus_id`, `is_ai`, `generator` | stimulus, truth (1 = AI), source |
+| `user_choice` | answer: 1 = "AI-generated", 0 = "Real photo" |
+| `response_time_ms`, `exposure_ms`, `focus_lost` | response time, exposure time, loss of focus |
+| `button_layout`, `major`, `device_type` | button layout, field of study, `mobile`/`pc` |
+| `submitted_at` | time of saving (UTC) |
 
-Положительный класс — AI, как в вашем пайплайне: FPR = реальное названо ИИ, FNR = ИИ названо реальным.
+The positive class is AI, as in your pipeline: FPR = real judged as AI, FNR = AI judged as real.
 
-## Подключение к проекту
+## Connecting to the project
 
-Папка уже лежит в репозитории как `web/`. После окончания сбора запустите из корня репозитория `python src/import_web_data.py`
-(проверит формат и скопирует файл в `data/real/participant_trials.csv`), затем укажите этот путь в `dataset.human_trials_path`
-в `config.yaml`. Подробности и пороги валидности времени ответа — в главном `README.md`, раздел «Web-стенд и подключение реальных данных».
+The folder already lives in the repository as `web/`. When data collection is finished, run `python src/import_web_data.py` from the repository root
+(it validates the format and copies the file to `data/real/participant_trials.csv`), then set this path in `dataset.human_trials_path`
+in `config.yaml`. Details and the validity thresholds for response time are in the main `README.md`, section "Web experiment and connecting real data".
 
-## Как выложить для участников
+## Making it available to participants
 
-Для набора через интернет нужен публичный адрес: временно `ngrok http 3000` или `cloudflared tunnel`, надолго — Render, Railway или Fly.io (`npm start`).
-Файловая система на бесплатных хостингах часто временная, поэтому скачивайте `participant_trials.csv` после каждого дня сбора или подключите постоянный том.
+Recruiting over the internet needs a public address: `ngrok http 3000` or `cloudflared tunnel` temporarily; Render, Railway or Fly.io (`npm start`) for the long term.
+The file system on free hosting is often temporary, so download `participant_trials.csv` after every day of collection or attach a persistent volume.
 
-## Ограничения
+## Limitations
 
-- Сохраняются только полностью завершённые сессии. Если сервер перезапустится посреди прохождения, эта сессия потеряется.
-- Порядок блоков чередуется по числу начатых сессий, поэтому при большом числе незавершённых прохождений баланс AB/BA слегка смещается. Проверьте `block_order` по итогам.
-- Точность таймеров ограничена частотой обновления экрана (кадр ≈16 мс). Для 3-секундного показа это приемлемо, но устройства стоит указывать в методике.
-- Текст согласия типовой: согласуйте его с требованиями вашего университета и добавьте контакт исследователей.
+- Only fully finished sessions are saved. If the server restarts in the middle of a session, that session is lost.
+- The block order alternates by the number of started sessions, so with many unfinished sessions the AB/BA balance shifts slightly. Check `block_order` at the end.
+- Timer accuracy is limited by the screen refresh rate (one frame ≈ 16 ms). This is acceptable for a 3-second exposure, but the devices should be stated in the methodology.
+- The consent text is generic: align it with your university's requirements and add the researchers' contact.

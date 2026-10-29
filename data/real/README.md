@@ -1,5 +1,5 @@
 # data/real
 
-Сюда `python src/import_web_data.py` кладёт `participant_trials.csv` — реальные данные участников из `web/`.
-Пока файла нет, анализ работает на пилотном сэмпле (`data/sample/sample_logs.csv`).
-Перед публикацией репозитория решите, можно ли выкладывать этот файл (в нём нет личных данных: id случайные, но есть направление обучения).
+`python src/import_web_data.py` puts `participant_trials.csv` here: the real participant data from `web/`.
+Until this file exists, the analysis runs on the pilot sample (`data/sample/sample_logs.csv`).
+Before publishing the repository, decide whether this file may be published (it contains no personal data: ids are random, but the field of study is recorded).
