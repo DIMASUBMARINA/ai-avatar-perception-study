@@ -2,6 +2,7 @@
 import json
 import os
 import shutil
+import yaml
 import subprocess
 import sys
 from pathlib import Path
@@ -22,6 +23,11 @@ def repo_copy(tmp_path):
     shutil.copytree(ROOT / "src", dst / "src", ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copytree(ROOT / "data" / "sample", dst / "data" / "sample")
     shutil.copy(ROOT / "config.yaml", dst / "config.yaml")
+    # the tests are built on the pilot file, whatever human_trials_path the real config points to
+    cfg_path = dst / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg["dataset"]["human_trials_path"] = cfg["dataset"]["sample_logs_path"]
+    cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
     return dst
 
 

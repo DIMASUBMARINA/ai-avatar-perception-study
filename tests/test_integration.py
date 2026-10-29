@@ -39,11 +39,13 @@ def test_web_export_schema_is_readable_by_pipeline(monkeypatch):
     assert set(metrics["condition"]) == {"3s_limit", "unrestricted"}
 
 
-def test_default_config_points_to_pilot_sample(monkeypatch):
-    """Tests and the reference README tables rely on the pilot file until the user switches."""
+def test_configured_trials_file_exists(monkeypatch):
+    """human_trials_path must point to the pilot sample or to the imported real data, and the file must exist."""
     from common import load_config, trials_path
     monkeypatch.delenv("AVATAR_TRIALS_PATH", raising=False)
-    assert trials_path(load_config()) == ROOT / "data" / "sample" / "sample_logs.csv"
+    path = trials_path(load_config())
+    assert path in (ROOT / "data" / "sample" / "sample_logs.csv", ROOT / "data" / "real" / "participant_trials.csv")
+    assert path.exists(), f"{path} not found: run src/import_web_data.py or fix dataset.human_trials_path"
 
 
 def test_env_var_overrides_trials_path(monkeypatch, tmp_path):
