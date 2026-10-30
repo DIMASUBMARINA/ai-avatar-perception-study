@@ -5,7 +5,7 @@
 
 ## Authors
 * **Yugay Dmitriy** — *Student Researcher*
-* **Nigai Maxim** — *Student Researcher*
+* **Nigay Maxim** — *Student Researcher*
 
 ---
 
@@ -315,8 +315,8 @@ git push --tags
 ## Citation & License
 
 ```bibtex
-@misc{yugay_nigai_avatar_perception_2026,
-  author       = {Yugay, Dmitriy and Nigai, Maxim},
+@misc{yugay_nigay_avatar_perception_2026,
+  author       = {Yugay, Dmitriy and Nigay, Maxim},
   title        = {Human Perception and Error Rates in AI-Generated Avatar Detection Under Time Constraints},
   year         = {2026},
   publisher    = {GitHub},
