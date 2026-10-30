@@ -29,7 +29,7 @@ stats:
 guardrails:
   max_allowed_tir_percent: 15.0   # max share of invalid trials
   min_valid_rt_ms: 200
-  max_valid_rt_ms: 15000
+  max_valid_rt_ms: null             # no upper limit by default; set a number (ms) to exclude very slow trials
   # Optional per-condition upper limit. Without a time limit slow answers can be legitimate,
   # so decide this threshold BEFORE looking at the real data. Example:
   # max_valid_rt_ms_by_condition: {unrestricted: 60000}

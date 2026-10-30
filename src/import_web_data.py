@@ -53,7 +53,8 @@ def summarize(df: pd.DataFrame, cfg: dict) -> None:
     for cond, grp in df.groupby("condition"):
         f = flags.loc[grp.index]
         print(f"  {cond:<13} trials={len(grp):<5} excluded={100.0 * f.any(axis=1).mean():.1f}%  "
-              f"[rt {100.0 * f['invalid_rt'].mean():.1f}% (limit {g['min_valid_rt_ms']}..{max_rt_for(cond, g)} ms), "
+              f"[rt {100.0 * f['invalid_rt'].mean():.1f}% (min {g['min_valid_rt_ms']} ms, "
+              f"{'no upper limit' if max_rt_for(cond, g) is None else 'max %s ms' % max_rt_for(cond, g)}), "
               f"focus {100.0 * f['invalid_focus'].mean():.1f}%, exposure {100.0 * f['invalid_exposure'].mean():.1f}%]")
 
 

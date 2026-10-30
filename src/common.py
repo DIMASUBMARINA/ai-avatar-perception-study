@@ -19,14 +19,15 @@ def resolve(rel_path: str) -> Path:
     return ROOT / rel_path
 
 
-def is_valid_trial(response_time_ms: float, min_rt: float, max_rt: float) -> bool:
-    return min_rt <= response_time_ms <= max_rt
+def is_valid_trial(response_time_ms: float, min_rt: float, max_rt: float = None) -> bool:
+    """Lower bound is always applied; max_rt=None means no upper limit."""
+    return response_time_ms >= min_rt and (max_rt is None or response_time_ms <= max_rt)
 
 
-def max_rt_for(condition: str, guardrails: dict) -> float:
-    """Upper RT limit for a condition: per-condition override, else the global max_valid_rt_ms."""
+def max_rt_for(condition: str, guardrails: dict):
+    """Upper RT limit for a condition: per-condition override, else the global max_valid_rt_ms (None = no limit)."""
     overrides = guardrails.get("max_valid_rt_ms_by_condition") or {}
-    return overrides.get(condition, guardrails["max_valid_rt_ms"])
+    return overrides.get(condition, guardrails.get("max_valid_rt_ms"))
 
 
 def trials_path(cfg: dict = None) -> Path:

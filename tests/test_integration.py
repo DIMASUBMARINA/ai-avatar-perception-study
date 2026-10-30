@@ -65,10 +65,10 @@ def test_per_condition_rt_limit(monkeypatch, tmp_path):
         "response_time_ms": [1000, 20000, 1000, 20000],
     }).to_csv(csv, index=False)
 
-    base = p.load_human_trials(_cfg_with(csv, max_valid_rt_ms_by_condition={}))
+    base = p.load_human_trials(_cfg_with(csv, max_valid_rt_ms=15000, max_valid_rt_ms_by_condition={}))
     assert base["is_valid"].tolist() == [True, False, True, False]
 
-    raised = p.load_human_trials(_cfg_with(csv, max_valid_rt_ms_by_condition={"unrestricted": 60000}))
+    raised = p.load_human_trials(_cfg_with(csv, max_valid_rt_ms=15000, max_valid_rt_ms_by_condition={"unrestricted": 60000}))
     assert raised["is_valid"].tolist() == [True, False, True, True]
 
 
@@ -128,3 +128,19 @@ def test_rules_are_skipped_without_columns(monkeypatch):
     monkeypatch.delenv("AVATAR_TRIALS_PATH", raising=False)
     df = p.load_human_trials(load_config())
     assert not df[["invalid_focus", "invalid_exposure"]].any().any()
+
+
+def test_no_upper_rt_limit_by_default(monkeypatch, tmp_path):
+    """max_valid_rt_ms is null: slow answers are valid, the lower bound still applies."""
+    import process_data as p
+    from common import load_config
+    monkeypatch.delenv("AVATAR_TRIALS_PATH", raising=False)
+    assert load_config()["guardrails"]["max_valid_rt_ms"] is None
+    base = dict(participant_id="P1", stimulus_id="s", is_ai=1, user_choice=1)
+    csv = _write(tmp_path, [
+        dict(base, condition="unrestricted", response_time_ms=900000),   # 15 minutes: still valid
+        dict(base, condition="3s_limit", response_time_ms=120),          # too fast: invalid
+        dict(base, condition="3s_limit", response_time_ms=1500),
+    ])
+    df = p.load_human_trials(_cfg_with(csv))
+    assert df["is_valid"].tolist() == [True, False, True]

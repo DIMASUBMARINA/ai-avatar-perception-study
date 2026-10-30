@@ -68,5 +68,11 @@ async function trial(cond, answerAfterMs, btn) {
   assert.ok(!settled, 'auto-repeated key must be ignored');
   env.document.fire('keydown', { key: 'ArrowRight', repeat: false });
   assert.strictEqual((await p).choice, 1);
+  // 5. the final score is shown only when the server returned a valid one
+  const sc = makeEnv(), el = sc.get('#score'); el.hidden = true;
+  vm.runInContext('showScore({})', sc.ctx);
+  assert.ok(el.hidden, 'no score must be shown without data');
+  vm.runInContext('showScore({ correct: 31, total: 40 })', sc.ctx);
+  assert.ok(!el.hidden && el.textContent.includes('31 of 40') && el.textContent.includes('78%'), el.textContent);
   console.log('OK: trial timing logic');
 })().catch(e => { console.error('FAIL:', e.message); process.exit(1); });

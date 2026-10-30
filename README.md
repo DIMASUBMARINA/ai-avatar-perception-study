@@ -5,7 +5,7 @@
 
 ## Authors
 * **Yugay Dmitriy** — *Student Researcher*
-* **Nigay Maxim** — *Student Researcher*
+* **Nigai Maxim** — *Student Researcher*
 
 ---
 
@@ -168,13 +168,14 @@ A trial is invalid (`is_valid = False`) and is left out of the metrics, but it *
 
 | Rule | Setting in `config.yaml` |
 |---|---|
-| response time outside `min_valid_rt_ms .. max_valid_rt_ms` (200–15000 ms) | `guardrails.min_valid_rt_ms`, `max_valid_rt_ms` |
+| response time below `min_valid_rt_ms` (200 ms), or above `max_valid_rt_ms` if one is set (no upper limit by default) | `guardrails.min_valid_rt_ms`, `max_valid_rt_ms` |
 | the participant switched tabs (`focus_lost = 1`) | `guardrails.exclude_focus_lost: true` |
 | in `3s_limit` the face stayed on screen longer than the limit + tolerance (timer failure) | `guardrails.max_exposure_overshoot_ms: 150` |
 
-If the 15000 ms limit is too strict for free viewing, raise it: either with the global `max_valid_rt_ms` or per condition
-(`max_valid_rt_ms_by_condition: {unrestricted: 60000}`). Choose the values **before** looking at the real data and record them in the report:
-excluding slow trials in only one condition inflates its accuracy. As a control, `participant_table.csv` contains `accuracy_all_pct`
+There is **no upper limit** on response time by default (`max_valid_rt_ms: null`), because without a time limit slow answers can be legitimate.
+The consequence: a participant who leaves in the middle of a trial still counts, and very long times distort RT means and SDs, so use medians for response time.
+If you want an upper limit, set `max_valid_rt_ms` (ms) globally or per condition (`max_valid_rt_ms_by_condition: {unrestricted: 60000}`).
+Choose the values **before** looking at the real data and record them in the report: excluding slow trials in only one condition inflates its accuracy. As a control, `participant_table.csv` contains `accuracy_all_pct`
 (accuracy over all trials without exclusions); if the conclusions change when exclusions are applied, this has to be discussed.
 `import_web_data.py` shows the share of excluded trials per condition and reason. Rules are skipped when the required columns are missing (the pilot file);
 `experiment.viewing_time_limit_ms` must match `VIEW_LIMIT_MS` of the web experiment.
@@ -314,8 +315,8 @@ git push --tags
 ## Citation & License
 
 ```bibtex
-@misc{yugay_nigay_avatar_perception_2026,
-  author       = {Yugay, Dmitriy and Nigay, Maxim},
+@misc{yugay_nigai_avatar_perception_2026,
+  author       = {Yugay, Dmitriy and Nigai, Maxim},
   title        = {Human Perception and Error Rates in AI-Generated Avatar Detection Under Time Constraints},
   year         = {2026},
   publisher    = {GitHub},
