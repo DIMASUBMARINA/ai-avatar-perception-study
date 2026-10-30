@@ -113,10 +113,20 @@ async function runExperiment() {
   await save();
 }
 
+function showScore(d) {
+  const el = $('#score');
+  if (!Number.isFinite(d.correct) || !(d.total > 0)) return;
+  el.textContent = `Your score: ${d.correct} of ${d.total} correct (${Math.round(100 * d.correct / d.total)}%).`;
+  el.hidden = false;
+}
+
 async function save() {
   try {
     const r = await post(`/api/session/${session.session_id}/finish`, { responses });
-    if (r.ok || r.status === 409) return show('done');   // 409: already stored on an earlier attempt
+    if (r.ok || r.status === 409) {   // 409: already stored on an earlier attempt
+      showScore(await r.json().catch(() => ({})));
+      return show('done');
+    }
     throw new Error((await r.json()).error || r.status);
   } catch (e) { fail('Your answers were not saved (' + e.message + '). Check your connection and retry.', save); }
 }

@@ -45,6 +45,7 @@ Settings are given through environment variables: `PORT`, `TRIALS_PER_BLOCK` (ev
   in `unrestricted` it equals RT; in `3s_limit` it equals RT for an early answer and ~3000–3020 ms if the picture was hidden by the timer
   (values clearly above the limit mean a timer failure, for example because of a minimised tab).
 - `focus_lost = 1` if the tab lost focus during the trial (a candidate for exclusion).
+- At the end the participant sees the number of correct answers (for example "Your score: 31 of 40 correct (78%)"). The server computes it, so the truth still never reaches the browser before the end.
 
 ## Columns of `data/participant_trials.csv`
 

@@ -42,6 +42,8 @@ $$
 TIR=\frac{\left|\{i:\ t_i<t_{min}\ \lor\ t_i>t_{max}\}\right|}{N}\cdot 100\%,\qquad TIR \le 15\%
 $$
 
+No upper bound $t_{max}$ is set by default, so the condition $t_i>t_{max}$ then never applies.
+
 Invalid trials are **not deleted silently** (that would cause selection bias); they are counted in $TIR$.
 For data from the web experiment, a trial is additionally invalid if the participant switched tabs or if the face stayed on screen
 longer than the time limit plus a tolerance (see the main `README.md`); the upper bound $t_{max}$ may be set per condition.
@@ -63,7 +65,7 @@ where $\hat\theta^{*}_{(q)}$ is the $q$-quantile of the bootstrap distribution o
 | $y_i \in \{0,1\}$ | True class of the stimulus (1 = AI avatar) | — |
 | $\hat{y}_i \in \{0,1\}$ | Participant's answer | — |
 | $t_i$ | Response time | ms |
-| $t_{min}, t_{max}$ | Bounds of a valid response time (200 and 15000) | ms |
+| $t_{min}, t_{max}$ | Bounds of a valid response time (lower bound 200; the upper bound is optional and unset by default) | ms |
 | $N$ | Number of valid trials in the condition | — |
 | $TP, TN, FP, FN$ | Entries of the confusion matrix | — |
 | $Acc$ | Detection accuracy | % |

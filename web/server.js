@@ -14,6 +14,7 @@ const STIM_DIR = process.env.STIM_DIR || path.join(ROOT, 'stimuli');
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const OUT_FILE = path.join(DATA_DIR, 'participant_trials.csv');
 const MAJORS = ['IT', 'Humanities', 'Other'];
+const MAX_RT_MS = 24 * 3600 * 1000;   // sanity bound for garbage input only, not an analysis limit
 const COLS = ['participant_id', 'condition', 'block_order', 'block_index', 'trial_index', 'stimulus_id', 'is_ai',
   'generator', 'user_choice', 'response_time_ms', 'exposure_ms', 'focus_lost', 'button_layout', 'major',
   'device_type', 'submitted_at'];
@@ -83,17 +84,19 @@ app.post('/api/session', (req, res) => {
 app.post('/api/session/:id/finish', (req, res) => {
   const s = sessions.get(req.params.id);
   if (!s) return res.status(404).json({ error: 'Session not found' });
-  if (s.done) return res.status(409).json({ error: 'Already saved' });
+  if (s.done) return res.status(409).json({ error: 'Already saved', ...s.score });
   const resp = (req.body || {}).responses;
   const expected = s.blocks.flatMap((b, bi) => b.trials.map((t, ti) => ({ ...t, condition: b.condition, bi, ti })));
   if (!Array.isArray(resp) || resp.length !== expected.length) return res.status(400).json({ error: 'Incomplete data' });
   const byId = new Map(resp.map(r => [r.stimulus_id, r]));
   const now = new Date().toISOString();
   const rows = [];
+  let correct = 0;
   for (const e of expected) {
     const r = byId.get(e.stimulus_id);
-    if (!r || ![0, 1].includes(r.choice) || !Number.isFinite(r.rt_ms) || r.rt_ms < 0 || r.rt_ms > 6e5) return res.status(400).json({ error: 'Invalid answer' });
+    if (!r || ![0, 1].includes(r.choice) || !Number.isFinite(r.rt_ms) || r.rt_ms < 0 || r.rt_ms > MAX_RT_MS) return res.status(400).json({ error: 'Invalid answer' });
     const truth = stim.map.get(e.stimulus_id);
+    if (Number(truth.is_ai) === r.choice) correct++;
     rows.push([req.params.id, e.condition, s.order[0] === '3s_limit' ? '3s_first' : 'unrestricted_first', e.bi, e.ti,
       e.stimulus_id, truth.is_ai, truth.generator, r.choice, r.rt_ms,
       Number.isFinite(r.exposure_ms) ? r.exposure_ms : '', r.focus_lost ? 1 : 0, s.layout, s.major, s.device_type, now]);
@@ -101,7 +104,8 @@ app.post('/api/session/:id/finish', (req, res) => {
   const header = fs.existsSync(OUT_FILE) ? '' : COLS.join(',') + '\n';
   fs.appendFileSync(OUT_FILE, header + rows.map(r => r.map(csv).join(',')).join('\n') + '\n');
   s.done = true;
-  res.json({ ok: true, rows: rows.length });
+  s.score = { correct, total: rows.length };
+  res.json({ ok: true, rows: rows.length, ...s.score });
 });
 
 if (require.main === module) {
