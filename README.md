@@ -315,8 +315,8 @@ git push --tags
 ## Citation & License
 
 ```bibtex
-@misc{yugay_nigay_avatar_perception_2026,
-  author       = {Yugay, Dmitriy and Nigay, Maxim},
+@misc{yugay_nigai_avatar_perception_2026,
+  author       = {Yugay, Dmitriy and Nigai, Maxim},
   title        = {Human Perception and Error Rates in AI-Generated Avatar Detection Under Time Constraints},
   year         = {2026},
   publisher    = {GitHub},
