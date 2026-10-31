@@ -74,5 +74,24 @@ async function trial(cond, answerAfterMs, btn) {
   assert.ok(el.hidden, 'no score must be shown without data');
   vm.runInContext('showScore({ correct: 31, total: 40 })', sc.ctx);
   assert.ok(!el.hidden && el.textContent.includes('31 of 40') && el.textContent.includes('78%'), el.textContent);
+  // 6. review screen data: one item per trial, in the order shown, with the truth
+  const rv = makeEnv();
+  rv.ctx.blocks = [
+    { condition: '3s_limit', trials: [{ stimulus_id: 'a', url: '/stim/a' }, { stimulus_id: 'b', url: '/stim/b' }] },
+    { condition: 'unrestricted', trials: [{ stimulus_id: 'c', url: '/stim/c' }, { stimulus_id: 'd', url: '/stim/d' }] },
+  ];
+  rv.ctx.answers = [{ stimulus_id: 'a', choice: 1 }, { stimulus_id: 'b', choice: 1 }, { stimulus_id: 'c', choice: 0 }, { stimulus_id: 'd', choice: 1 }];
+  rv.ctx.truthById = { a: 1, b: 0, c: 0, d: 0 };
+  const items = vm.runInContext('buildReview(blocks, answers, truthById)', rv.ctx);
+  assert.deepStrictEqual(items.map(i => [i.url, i.condition, i.correct]),
+    [['/stim/a', '3s_limit', true], ['/stim/b', '3s_limit', false], ['/stim/c', 'unrestricted', true], ['/stim/d', 'unrestricted', false]]);
+  rv.ctx.items = items;
+  const sm = vm.runInContext('summarize(items)', rv.ctx);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(sm)), {
+    byCondition: { '3s_limit': { correct: 1, total: 2 }, unrestricted: { correct: 1, total: 2 } },
+    total: { correct: 2, total: 4 },
+    realCalledAi: { n: 2, of: 3 },     // b and d are real photos answered "AI"
+    aiCalledReal: { n: 0, of: 1 },
+  });
   console.log('OK: trial timing logic');
 })().catch(e => { console.error('FAIL:', e.message); process.exit(1); });

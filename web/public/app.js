@@ -2,12 +2,12 @@
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-const VIEWS = ['consent', 'profile', 'intro', 'trial', 'done', 'error'];
+const VIEWS = ['consent', 'profile', 'intro', 'trial', 'done', 'results', 'error'];
 const show = n => { VIEWS.forEach(v => $('#v-' + v).hidden = v !== n); window.scrollTo(0, 0); };
 const post = (u, b) => fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
 const round1 = x => Math.round(x * 10) / 10;
 
-let session = null;
+let session = null, truth = null;
 const responses = [];
 
 const INTRO = {
@@ -24,12 +24,15 @@ async function init() {
 }
 $('#agree').onchange = e => { $('#toProfile').disabled = !e.target.checked; };
 $('#toProfile').onclick = () => show('profile');
-$('#major').onchange = () => { $('#start').disabled = !$('#major').value; };
+const priorValue = () => { const r = document.querySelector('input[name="prior"]:checked'); return r ? r.value : ''; };
+const checkProfile = () => { $('#start').disabled = !($('#major').value && priorValue()); };
+$('#major').onchange = checkProfile;
+document.querySelectorAll('input[name="prior"]').forEach(r => { r.onchange = checkProfile; });
 $('#start').onclick = async () => {
   $('#start').disabled = true; $('#startNote').hidden = false;
   const device_type = navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches ? 'mobile' : 'pc';
   try {
-    const r = await post('/api/session', { major: $('#major').value, device_type });
+    const r = await post('/api/session', { major: $('#major').value, prior_exposure: priorValue(), device_type });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.status);
     session = j;
@@ -120,11 +123,65 @@ function showScore(d) {
   el.hidden = false;
 }
 
+const CHOICE_TEXT = ['Real photo', 'AI-generated'];
+const COND_TEXT = { '3s_limit': 'Short exposure', unrestricted: 'Free viewing' };
+
+// One item per trial in the order shown: what was on screen, what the participant answered, what was true.
+function buildReview(blocks, answers, truthById) {
+  const byId = new Map(answers.map(a => [a.stimulus_id, a]));
+  return blocks.flatMap(b => b.trials.map(t => {
+    const choice = byId.get(t.stimulus_id).choice, is_ai = truthById[t.stimulus_id];
+    return { url: t.url, condition: b.condition, choice, is_ai, correct: choice === is_ai };
+  }));
+}
+
+function summarize(items) {
+  const by = {};
+  for (const it of items) { const c = by[it.condition] = by[it.condition] || { correct: 0, total: 0 }; c.total++; c.correct += it.correct; }
+  const real = items.filter(i => i.is_ai === 0), ai = items.filter(i => i.is_ai === 1);
+  return { byCondition: by, total: { correct: items.filter(i => i.correct).length, total: items.length },
+    realCalledAi: { n: real.filter(i => i.choice === 1).length, of: real.length },
+    aiCalledReal: { n: ai.filter(i => i.choice === 0).length, of: ai.length } };
+}
+
+function renderResults() {
+  const items = buildReview(session.blocks, responses, truth), s = summarize(items);
+  const lines = [`Overall: ${s.total.correct} of ${s.total.total} correct.`];
+  for (const [cond, c] of Object.entries(s.byCondition)) lines.push(`${COND_TEXT[cond]}: ${c.correct} of ${c.total} correct.`);
+  lines.push(`Real photos you took for AI-generated: ${s.realCalledAi.n} of ${s.realCalledAi.of}.`);
+  lines.push(`AI-generated faces you took for real photos: ${s.aiCalledReal.n} of ${s.aiCalledReal.of}.`);
+  const sum = $('#resSummary'); sum.textContent = '';
+  for (const l of lines) { const li = document.createElement('li'); li.textContent = l; sum.appendChild(li); }
+  const list = $('#review'); list.textContent = '';
+  items.forEach((it, i) => {
+    const li = document.createElement('li'); li.className = it.correct ? 'ok' : 'bad';
+    const img = document.createElement('img'); img.src = it.url; img.alt = `Face ${i + 1}`; img.loading = 'lazy';
+    const v = document.createElement('div'); v.className = 'verdict'; v.textContent = it.correct ? 'Correct' : 'Wrong';
+    const d = document.createElement('div');
+    d.textContent = `It was: ${CHOICE_TEXT[it.is_ai]}. You answered: ${CHOICE_TEXT[it.choice]}. (${COND_TEXT[it.condition]}, #${i + 1})`;
+    li.append(img, v, d); list.appendChild(li);
+  });
+  applyFilter();
+}
+
+function applyFilter() {
+  const only = $('#onlyMistakes').checked;
+  const cards = [...$('#review').children];
+  cards.forEach(li => { li.hidden = only && li.className === 'ok'; });
+  $('#noMistakes').hidden = !(only && cards.length && cards.every(li => li.className === 'ok'));
+}
+
+$('#showResults').onclick = () => { renderResults(); show('results'); };
+$('#backToDone').onclick = () => show('done');
+$('#onlyMistakes').onchange = applyFilter;
+
 async function save() {
   try {
     const r = await post(`/api/session/${session.session_id}/finish`, { responses });
     if (r.ok || r.status === 409) {   // 409: already stored on an earlier attempt
-      showScore(await r.json().catch(() => ({})));
+      const d = await r.json().catch(() => ({}));
+      showScore(d);
+      if (d.truth && typeof d.truth === 'object') { truth = d.truth; $('#showResults').hidden = false; }
       return show('done');
     }
     throw new Error((await r.json()).error || r.status);

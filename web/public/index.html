@@ -38,6 +38,18 @@
   #answers button:hover { background: var(--ink); color: var(--ground); }
   #answers button[data-side="left"] { order: 1; } #answers button[data-side="right"] { order: 2; }
   .hint { text-align: center; font-size: .85rem; margin-top: 8px; }
+  .notice { border-left: 4px solid var(--accent); padding: 8px 14px; margin: 16px 0; background: var(--stage); border-radius: 0 6px 6px 0; }
+  fieldset { border: 0; padding: 0; margin: 18px 0 8px; }
+  legend { font-weight: 600; padding: 0; margin-bottom: 4px; }
+  .secondary { background: transparent; color: var(--ink); border: 2px solid var(--ink); border-radius: 6px; padding: 10px 20px; cursor: pointer; font-weight: 600; margin-top: 12px; }
+  #resSummary { padding-left: 1.2rem; margin: 8px 0 12px; }
+  #review { list-style: none; padding: 0; margin: 12px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  #review li { border: 2px solid var(--line); border-radius: 6px; padding: 6px; font-size: .85rem; line-height: 1.35; }
+  #review li.ok { border-color: #2e7d4f; } #review li.bad { border-color: #b3261e; }
+  #review img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; border-radius: 3px; background: var(--stage); }
+  #review .verdict { font-weight: 700; margin-top: 4px; }
+  #review li.ok .verdict { color: #2e7d4f; } #review li.bad .verdict { color: #b3261e; }
+  @media (prefers-color-scheme: dark) { #review li.ok .verdict { color: #7fd1a0; } #review li.bad .verdict { color: #f2a29b; } #review li.ok { border-color: #7fd1a0; } #review li.bad { border-color: #f2a29b; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -52,22 +64,31 @@
       <li>You will be shown a few dozen faces, one at a time. For each one, choose “Real photo” or “AI-generated”.</li>
       <li>It takes about 5–7 minutes. In half of the trials the face is shown for at most 3 seconds; in the others for as long as you need.</li>
       <li>Participation is voluntary. You can stop at any time by closing the page: incomplete data is not saved.</li>
-      <li>We do not collect your name, e-mail or other personal data. Only your answers, response times, field of study (a general group) and device type are saved.</li>
+      <li>We do not collect your name, e-mail or other personal data. Only your answers, response times, field of study (a general group), device type and whether you had seen the test before are saved.</li>
+      <li>At the end you can see which of your answers were right and which were wrong.</li>
     </ul>
+    <p class="notice"><strong>Please take the test only once.</strong> A second attempt would not be comparable with the others and cannot be used.</p>
     <label class="row"><input type="checkbox" id="agree"><span>I am 18 or older, I have read the description and I agree to take part.</span></label>
     <button class="primary" id="toProfile" disabled>Continue</button>
   </section>
 
   <section id="v-profile" hidden>
-    <h2>One question about you</h2>
-    <p class="muted">Used only to compare groups.</p>
+    <h2>Two questions about you</h2>
+    <p class="muted">Used only to compare groups and to check the data quality.</p>
     <label for="major"><strong>Field of study</strong></label><br>
     <select id="major">
       <option value="" selected disabled>Select</option>
       <option value="IT">IT and technical sciences</option>
       <option value="Humanities">Humanities</option>
       <option value="Other">Other</option>
-    </select><br>
+    </select>
+    <fieldset>
+      <legend>Have you taken this test before, or has anyone told you which images are AI?</legend>
+      <label class="row"><input type="radio" name="prior" value="no"><span>No</span></label>
+      <label class="row"><input type="radio" name="prior" value="yes"><span>Yes</span></label>
+      <label class="row"><input type="radio" name="prior" value="unsure"><span>Not sure</span></label>
+    </fieldset>
+    <p class="muted">Please answer honestly: answering “Yes” does not stop you from taking part, we only use it to check the data.</p>
     <button class="primary" id="start" disabled>Start</button>
     <p id="startNote" class="muted" hidden>Preparing...</p>
   </section>
@@ -95,7 +116,20 @@
   <section id="v-done" hidden>
     <h1>Done, thank you!</h1>
     <p id="score" hidden></p>
-    <p>Your answers have been saved. You can close the page.</p>
+    <p>Your answers have been saved.</p>
+    <button class="primary" id="showResults" hidden>View results</button>
+    <p class="muted">You can close the page when you are done.</p>
+  </section>
+
+  <section id="v-results" hidden>
+    <h1>Your results</h1>
+    <ul id="resSummary"></ul>
+    <p class="notice"><strong>Please do not share which images are AI-generated, or the correct answers, with people who have not taken the test yet.</strong>
+      It would spoil the study. You may share your score, and discuss the test with people who have already taken it. Please do not take the test again.</p>
+    <label class="row"><input type="checkbox" id="onlyMistakes"><span>Show only my mistakes</span></label>
+    <p id="noMistakes" class="muted" hidden>No mistakes to show: all your answers were correct.</p>
+    <ol id="review"></ol>
+    <button class="secondary" id="backToDone">Back</button>
   </section>
 
   <section id="v-error" hidden>

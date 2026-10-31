@@ -8,6 +8,12 @@ and conditions are compared with paired tests and a participant-level (cluster) 
 
 Output (data/processed/): participant_table.csv, participant_level_tests.csv
 Exploratory metrics (everything except accuracy) are not corrected for multiple comparisons.
+
+participant_level_tests.csv has a `sample` column:
+  primary                       participants without the excluded prior_exposure answers (config participants.exclude_prior_exposure)
+  sensitivity: all participants the same tests on everybody, to see whether the exclusion changes the conclusions
+  check: all participants       leakage check: accuracy vs. the order in which participants finished (Spearman, first vs second half);
+                                a rise over time suggests that answers were passed on
 """
 import argparse
 from pathlib import Path
@@ -99,11 +105,74 @@ def participant_tests(table: pd.DataFrame, cfg: dict, rng) -> pd.DataFrame:
     return pd.DataFrame(rows).round(4)
 
 
+def participant_info(df: pd.DataFrame) -> pd.DataFrame:
+    """Per participant: prior_exposure answer and the rank of the finishing time (1 = first to finish), when available."""
+    g = df.groupby("participant_id")
+    out = pd.DataFrame(index=g.size().index)
+    if "prior_exposure" in df.columns:
+        out["prior_exposure"] = g["prior_exposure"].first()
+    if "submitted_at" in df.columns:
+        when = pd.to_datetime(g["submitted_at"].min(), utc=True, errors="coerce")
+        out["submit_rank"] = when.rank(method="first").astype("Int64")
+    return out.reset_index()
+
+
+def excluded_participants(df: pd.DataFrame, cfg: dict) -> set:
+    values = set((cfg.get("participants") or {}).get("exclude_prior_exposure") or [])
+    if not values or "prior_exposure" not in df.columns:
+        return set()
+    first = df.groupby("participant_id")["prior_exposure"].first()
+    return set(first[first.isin(values)].index)
+
+
+def leakage_checks(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Does accuracy drift with the order of finishing? (all participants, both conditions, valid trials)"""
+    if "submitted_at" not in df.columns:
+        return pd.DataFrame()
+    min_n = (cfg.get("participants") or {}).get("min_participants_order_check", 8)
+    acc = df[df["is_valid"]].groupby("participant_id")["is_correct"].mean() * 100
+    when = pd.to_datetime(df.groupby("participant_id")["submitted_at"].min(), utc=True, errors="coerce")
+    d = pd.DataFrame({"acc": acc, "when": when}).dropna().sort_values("when", kind="stable")
+    n = len(d)
+    base = {"metric": "accuracy_pct", "condition": "", "n": n, "ci_low": np.nan, "ci_high": np.nan}
+    rows = []
+    if n < min_n:
+        note = f"fewer than {min_n} participants, no check"
+        rows.append({**base, "analysis": "accuracy vs order of finishing (Spearman rho)", "estimate": np.nan,
+                     "statistic": np.nan, "p_value": np.nan, "note": note})
+        rows.append({**base, "analysis": "accuracy second half - first half (Mann-Whitney)", "estimate": np.nan,
+                     "statistic": np.nan, "p_value": np.nan, "note": note})
+        return pd.DataFrame(rows).round(4)
+    if d["acc"].nunique() < 2:
+        rho, p, note = np.nan, np.nan, "accuracy is identical for all participants"
+    else:
+        res = stats.spearmanr(np.arange(n), d["acc"].to_numpy())
+        rho, p, note = float(res.statistic), float(res.pvalue), ""
+    rows.append({**base, "analysis": "accuracy vs order of finishing (Spearman rho)", "estimate": rho,
+                 "statistic": np.nan, "p_value": p, "note": note})
+    first, second = d["acc"].iloc[: n // 2], d["acc"].iloc[n - n // 2:]
+    mw = stats.mannwhitneyu(second, first, alternative="two-sided")
+    rows.append({**base, "n": f"{len(first)}+{len(second)}", "analysis": "accuracy second half - first half (Mann-Whitney)",
+                 "estimate": float(second.mean() - first.mean()), "statistic": float(mw.statistic),
+                 "p_value": float(mw.pvalue), "note": ""})
+    return pd.DataFrame(rows).round(4)
+
+
 def run(cfg: dict = None, out_dir=None) -> tuple:
     cfg = cfg or load_config()
     df = load_human_trials(cfg)
-    table = participant_table(df)
-    tests = participant_tests(table, cfg, np.random.default_rng(cfg["experiment"]["random_seed"]))
+    table = participant_table(df).merge(participant_info(df), on="participant_id", how="left")
+    excluded = excluded_participants(df, cfg)
+    table["in_primary"] = ~table["participant_id"].isin(excluded)
+    seed = cfg["experiment"]["random_seed"]
+    parts = [participant_tests(table[table["in_primary"]], cfg, np.random.default_rng(seed)).assign(sample="primary")]
+    if excluded:
+        parts.append(participant_tests(table, cfg, np.random.default_rng(seed)).assign(sample="sensitivity: all participants"))
+    leak = leakage_checks(df, cfg)
+    if len(leak):
+        parts.append(leak.assign(sample="check: all participants"))
+    tests = pd.concat(parts, ignore_index=True)
+    tests = tests[["sample"] + [c for c in tests.columns if c != "sample"]]
     out = Path(out_dir) if out_dir else resolve(cfg["dataset"]["processed_dir"])
     out.mkdir(parents=True, exist_ok=True)
     table.to_csv(out / "participant_table.csv", index=False)
@@ -118,6 +187,6 @@ if __name__ == "__main__":
     cfg = load_config()
     print(f"[PARTICIPANT LEVEL] reading {trials_path(cfg)}")
     table, tests, out = run(cfg, args.out)
-    print(f"participants: {table['participant_id'].nunique()}")
+    print(f"participants: {table['participant_id'].nunique()}  in primary analysis: {int(table['in_primary'].sum())}")
     print(tests.to_string(index=False))
     print(f"[EXPORT] participant_table.csv, participant_level_tests.csv -> {out}")

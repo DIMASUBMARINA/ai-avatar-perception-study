@@ -14,10 +14,11 @@ const STIM_DIR = process.env.STIM_DIR || path.join(ROOT, 'stimuli');
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const OUT_FILE = path.join(DATA_DIR, 'participant_trials.csv');
 const MAJORS = ['IT', 'Humanities', 'Other'];
+const PRIORS = ['no', 'yes', 'unsure'];   // "took the test before / was told which images are AI"
 const MAX_RT_MS = 24 * 3600 * 1000;   // sanity bound for garbage input only, not an analysis limit
 const COLS = ['participant_id', 'condition', 'block_order', 'block_index', 'trial_index', 'stimulus_id', 'is_ai',
   'generator', 'user_choice', 'response_time_ms', 'exposure_ms', 'focus_lost', 'button_layout', 'major',
-  'device_type', 'submitted_at'];
+  'device_type', 'prior_exposure', 'submitted_at'];
 if (TPB % 2) throw new Error('TRIALS_PER_BLOCK must be even');
 
 const walk = d => fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true })
@@ -47,6 +48,11 @@ const countParticipants = () => fs.existsSync(OUT_FILE)
   ? new Set(fs.readFileSync(OUT_FILE, 'utf8').split('\n').slice(1).filter(Boolean).map(l => l.split(',')[0])).size : 0;
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
+if (fs.existsSync(OUT_FILE)) {   // appending rows with new columns to an old file would silently misalign the data
+  const first = fs.readFileSync(OUT_FILE, 'utf8').split(/\r?\n/)[0];
+  if (first && first !== COLS.join(','))
+    throw new Error(`${OUT_FILE} has a different column layout (written by an older version). Move or delete it before collecting data.`);
+}
 let started = countParticipants();   // block order alternates AB / BA by arrival
 const sessions = new Map();
 
@@ -64,8 +70,9 @@ app.get('/stim/:id', (req, res) => {
 });
 
 app.post('/api/session', (req, res) => {
-  const { major, device_type } = req.body || {};
-  if (!MAJORS.includes(major) || !['mobile', 'pc'].includes(device_type)) return res.status(400).json({ error: 'Invalid profile' });
+  const { major, device_type, prior_exposure } = req.body || {};
+  if (!MAJORS.includes(major) || !['mobile', 'pc'].includes(device_type) || !PRIORS.includes(prior_exposure))
+    return res.status(400).json({ error: 'Invalid profile' });
   if (stim.byClass.real.length < TPB || stim.byClass.ai.length < TPB)
     return res.status(500).json({ error: `At least ${TPB} images are required in stimuli/real and in stimuli/ai` });
   const half = TPB / 2, real = shuffle(stim.byClass.real.slice()), ai = shuffle(stim.byClass.ai.slice());
@@ -77,7 +84,7 @@ app.post('/api/session', (req, res) => {
   }));
   const participant_id = 'P' + crypto.randomBytes(4).toString('hex');
   const layout = crypto.randomInt(2) ? 'real_left' : 'ai_left';
-  sessions.set(participant_id, { order, blocks, major, device_type, layout, done: false });
+  sessions.set(participant_id, { order, blocks, major, device_type, prior_exposure, layout, done: false });
   res.json({ session_id: participant_id, limitMs: LIMIT_MS, layout, blocks });
 });
 
@@ -92,19 +99,21 @@ app.post('/api/session/:id/finish', (req, res) => {
   const now = new Date().toISOString();
   const rows = [];
   let correct = 0;
+  const truthById = {};   // returned only after the answers are saved: it feeds the review screen
   for (const e of expected) {
     const r = byId.get(e.stimulus_id);
     if (!r || ![0, 1].includes(r.choice) || !Number.isFinite(r.rt_ms) || r.rt_ms < 0 || r.rt_ms > MAX_RT_MS) return res.status(400).json({ error: 'Invalid answer' });
     const truth = stim.map.get(e.stimulus_id);
     if (Number(truth.is_ai) === r.choice) correct++;
+    truthById[e.stimulus_id] = Number(truth.is_ai);
     rows.push([req.params.id, e.condition, s.order[0] === '3s_limit' ? '3s_first' : 'unrestricted_first', e.bi, e.ti,
       e.stimulus_id, truth.is_ai, truth.generator, r.choice, r.rt_ms,
-      Number.isFinite(r.exposure_ms) ? r.exposure_ms : '', r.focus_lost ? 1 : 0, s.layout, s.major, s.device_type, now]);
+      Number.isFinite(r.exposure_ms) ? r.exposure_ms : '', r.focus_lost ? 1 : 0, s.layout, s.major, s.device_type, s.prior_exposure, now]);
   }
   const header = fs.existsSync(OUT_FILE) ? '' : COLS.join(',') + '\n';
   fs.appendFileSync(OUT_FILE, header + rows.map(r => r.map(csv).join(',')).join('\n') + '\n');
   s.done = true;
-  s.score = { correct, total: rows.length };
+  s.score = { correct, total: rows.length, truth: truthById };
   res.json({ ok: true, rows: rows.length, ...s.score });
 });
 

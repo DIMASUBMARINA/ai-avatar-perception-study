@@ -10,6 +10,7 @@ npm install
 npm run demo-stimuli     # only for a trial run: 24+24 placeholder pictures (not faces)
 npm start                # http://localhost:3000
 npm test                 # end-to-end check of the server and the data format
+cloudflared tunnel --url http://localhost:3000 # to open test to other people (open in another terminal)
 ```
 
 To collect data, **delete `stimuli/*/demo_*`** and put the real images into `stimuli/real/` and `stimuli/ai/`
@@ -32,7 +33,7 @@ Settings are given through environment variables: `PORT`, `TRIALS_PER_BLOCK` (ev
 
 ## How the experiment works
 
-- Consent (18+, anonymous) → field of study (IT / humanities / other) → two blocks → saving.
+- Consent (18+, anonymous, asks to take the test only once) → field of study (IT / humanities / other) and the question "Have you taken this test before, or has anyone told you which images are AI?" (`prior_exposure`: no / yes / not sure) → two blocks → saving.
 - Every participant takes both conditions. The block order alternates with the arrival of participants: `3s_first` and `unrestricted_first` (AB/BA).
 - Each block is 1:1 real/AI, the stimuli of the two blocks do not overlap, and the order of trials is random.
 - The side of the answer buttons ("Real photo" on the left or on the right) is random per participant: column `button_layout`.
@@ -45,6 +46,7 @@ Settings are given through environment variables: `PORT`, `TRIALS_PER_BLOCK` (ev
   in `unrestricted` it equals RT; in `3s_limit` it equals RT for an early answer and ~3000–3020 ms if the picture was hidden by the timer
   (values clearly above the limit mean a timer failure, for example because of a minimised tab).
 - `focus_lost = 1` if the tab lost focus during the trial (a candidate for exclusion).
+- After saving, the participant can press **View results**: every face with the correct answer and their own answer, per-condition scores, and a "show only my mistakes" filter. The review is built from data the server sends only after the answers are saved, and the screen asks not to share which images are AI with people who have not taken the test.
 - At the end the participant sees the number of correct answers (for example "Your score: 31 of 40 correct (78%)"). The server computes it, so the truth still never reaches the browser before the end.
 
 ## Columns of `data/participant_trials.csv`
@@ -58,6 +60,7 @@ Settings are given through environment variables: `PORT`, `TRIALS_PER_BLOCK` (ev
 | `user_choice` | answer: 1 = "AI-generated", 0 = "Real photo" |
 | `response_time_ms`, `exposure_ms`, `focus_lost` | response time, exposure time, loss of focus |
 | `button_layout`, `major`, `device_type` | button layout, field of study, `mobile`/`pc` |
+| `prior_exposure` | `no`, `yes` or `unsure`: took the test before or was told which images are AI |
 | `submitted_at` | time of saving (UTC) |
 
 The positive class is AI, as in your pipeline: FPR = real judged as AI, FNR = AI judged as real.
@@ -75,6 +78,7 @@ The file system on free hosting is often temporary, so download `participant_tri
 
 ## Limitations
 
+- The server refuses to start if `data/participant_trials.csv` was written by an older version (different columns): move or delete that file.
 - Only fully finished sessions are saved. If the server restarts in the middle of a session, that session is lost.
 - The block order alternates by the number of started sessions, so with many unfinished sessions the AB/BA balance shifts slightly. Check `block_order` at the end.
 - Timer accuracy is limited by the screen refresh rate (one frame ≈ 16 ms). This is acceptable for a 3-second exposure, but the devices should be stated in the methodology.

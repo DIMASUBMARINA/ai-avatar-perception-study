@@ -17,6 +17,7 @@ from common import ROOT, load_config, max_rt_for, trial_flags
 
 REQUIRED = ["participant_id", "condition", "stimulus_id", "is_ai", "user_choice", "response_time_ms"]
 CONDITIONS = {"3s_limit", "unrestricted"}
+PRIOR_VALUES = {"no", "yes", "unsure"}
 
 
 def validate(df: pd.DataFrame) -> list:
@@ -37,12 +38,21 @@ def validate(df: pd.DataFrame) -> list:
             problems.append(f"{col} must contain only 0/1")
     if not pd.api.types.is_numeric_dtype(df["response_time_ms"]):
         problems.append("response_time_ms is not numeric")
+    if "prior_exposure" in df.columns and not set(df["prior_exposure"].dropna().unique()) <= PRIOR_VALUES:
+        problems.append("prior_exposure must contain only no/yes/unsure")
     return problems
 
 
 def summarize(df: pd.DataFrame, cfg: dict) -> None:
     g = cfg["guardrails"]
     print(f"participants: {df['participant_id'].nunique()}  trials: {len(df)}")
+    if "prior_exposure" in df.columns:
+        per = df.groupby("participant_id")["prior_exposure"].first().value_counts()
+        print("  prior_exposure (participants): " + ", ".join(f"{k}={per.get(k, 0)}" for k in ("no", "unsure", "yes")))
+        out = cfg.get("participants", {}).get("exclude_prior_exposure") or []
+        if out:
+            print(f"  primary analysis will leave out prior_exposure in {out} "
+                  f"({int(per.reindex(out).fillna(0).sum())} participant(s)); change participants.exclude_prior_exposure to alter this")
     both = df.groupby("participant_id")["condition"].nunique()
     if (both < 2).any():
         print(f"WARNING: {(both < 2).sum()} participant(s) have only one condition")

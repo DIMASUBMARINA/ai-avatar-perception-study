@@ -37,3 +37,10 @@ guardrails:
   # Rules for the real (web) data; they are skipped when the columns are absent (pilot file).
   exclude_focus_lost: true          # trials where the participant switched tabs / minimised the window
   max_exposure_overshoot_ms: 150    # 3s_limit: face visible longer than limit + this = timer failure
+
+participants:
+  # Primary analysis (participant_level.py) leaves out participants whose answer to "Have you taken this test before,
+  # or has anyone told you which images are AI?" is in this list; the sensitivity analysis always includes everyone.
+  # Decide this BEFORE looking at the real data. Use [] to keep everybody.
+  exclude_prior_exposure: ["yes"]
+  min_participants_order_check: 8   # leakage check (accuracy vs. order of submission) needs at least this many participants

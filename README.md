@@ -62,6 +62,7 @@ ai-avatar-perception-study/
 │   ├── test_pipeline.py            # Pipeline tests and Task 3 requirements
 │   ├── test_integration.py         # Tests of the web data format, import and trial exclusion rules
 │   ├── test_participant_level.py   # Tests of the participant-level analysis
+│   ├── test_prior_exposure.py      # Tests of the prior-exposure filter, sensitivity analysis and leakage check
 │   └── fixtures/web_export_sample.csv   # Synthetic example of a web experiment export
 ├── config.yaml                     # Experiment parameters (seed, load, guardrails)
 ├── environment.yml / requirements.txt / Dockerfile
@@ -137,7 +138,8 @@ npm start                                    # http://localhost:3000
 cloudflared tunnel --url http://localhost:3000   # public link for participants (second terminal window)
 ```
 
-Before collecting data, delete `web/data/participant_trials.csv` if it still contains test runs.
+Before collecting data, delete `web/data/participant_trials.csv` if it still contains test runs. The server refuses to start if that file
+was written by an older version of the experiment (different columns), so that rows with new columns are never appended to an old file.
 
 ### 2. Connecting to the analysis (after data collection is finished)
 
@@ -194,7 +196,27 @@ The primary RQ1 outcome is accuracy (`accuracy_pct`); the other metrics are expl
 With fewer than 6 participants the script does not compute p-values and writes the reason in the `note` column. Table 1 below (`process_data.py`, `statistical_tests.csv`)
 treats trials as independent and is suitable for the pilot only.
 
-### 5. What to update in the report after switching to real data
+Participants who answered "Yes" to *"Have you taken this test before, or has anyone told you which images are AI?"* (column `prior_exposure`)
+are left out of the **primary** analysis (`participants.exclude_prior_exposure: ["yes"]` in `config.yaml`; "Not sure" stays in; `[]` keeps everyone).
+The same tests are repeated on all participants (`sample = "sensitivity: all participants"` in `participant_level_tests.csv`), so the report can
+show whether the exclusion changes the conclusions; `participant_table.csv` has the flag `in_primary`. Decide the exclusion rule **before** looking at the results.
+
+Leakage check (`sample = "check: all participants"`): accuracy against the order in which participants finished (Spearman correlation, and first half
+vs second half with Mann–Whitney). Accuracy that climbs with the order suggests that answers were passed on. It needs at least 8 participants.
+
+### 5. Answer review and data contamination
+
+After the answers are saved, a participant can open **View results** and see every face with the correct answer and their own answer, with a
+"show only my mistakes" filter. The truth is sent by the server only after saving, so it does not reach the browser before the end of the test.
+Because participants may pass the answers on, the web experiment:
+* asks everyone to take the test only once (first screen and results screen) and not to share which images are AI-generated, or the correct answers,
+  with people who have not taken the test yet (sharing the score is fine);
+* asks before the start whether the person took the test before or was told the answers (`prior_exposure`), which feeds the primary and sensitivity analysis above;
+* stores the finishing time (`submitted_at`) for the leakage check.
+
+Describe this in the methods section. The shorter the collection period, the smaller the chance that answers spread.
+
+### 6. What to update in the report after switching to real data
 * replace the "Data status" block and Table 1 in this README;
 * the pilot file `data/sample/sample_logs.csv` has no `exposure_ms` or `focus_lost` and does not document how response time was measured:
   it must not be merged with the web experiment data.
